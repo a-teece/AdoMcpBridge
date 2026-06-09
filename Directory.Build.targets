@@ -11,7 +11,9 @@
          CA1707 underscored test method names; CA1859 interface-typed locals
          (tests assert against abstractions deliberately); CA2007 ConfigureAwait
          is irrelevant in test hosts; CA1861 inline constant arrays in asserts;
-         CA1515 public test types are required by the xUnit runner. -->
-    <NoWarn>$(NoWarn);CA1707;CA1859;CA2007;CA1861;CA1515</NoWarn>
+         CA1515 public test types are required by the xUnit runner;
+         CA1711 the xUnit [CollectionDefinition] idiom names the class
+         '<Name>Collection'. -->
+    <NoWarn>$(NoWarn);CA1707;CA1859;CA2007;CA1861;CA1515;CA1711</NoWarn>
   </PropertyGroup>
 </Project>
