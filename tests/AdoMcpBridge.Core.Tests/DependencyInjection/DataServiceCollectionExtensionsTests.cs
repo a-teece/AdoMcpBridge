@@ -29,4 +29,14 @@ public sealed class DataServiceCollectionExtensionsTests
         var kvOpts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<KeyVaultOptions>>().Value;
         Assert.Equal("token-dek", kvOpts.DekName);
     }
+
+    [Fact]
+    public void AddBridgeDataServices_without_connection_string_throws()
+    {
+        var cfg = new ConfigurationBuilder().Build();
+        var services = new ServiceCollection();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => services.AddBridgeDataServices(cfg));
+        Assert.Contains("ConnectionString", ex.Message, StringComparison.Ordinal);
+    }
 }
