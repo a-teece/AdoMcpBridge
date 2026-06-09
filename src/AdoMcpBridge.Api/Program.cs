@@ -1,4 +1,5 @@
 using AdoMcpBridge.Api.Endpoints;
+using AdoMcpBridge.Api.Middleware;
 using AdoMcpBridge.Api.Options;
 using AdoMcpBridge.Api.Proxy;
 using AdoMcpBridge.Api.Telemetry;
@@ -18,6 +19,7 @@ builder.Services.AddRazorPages();
 builder.Services.AddMcpProxy(builder.Configuration);
 
 var app = builder.Build();
+app.UseBridgeErrorHandling();
 app.UseMcpProxy();
 app.MapGet("/healthz", () => Results.Ok("ok"));
 app.MapConnectorInfo();

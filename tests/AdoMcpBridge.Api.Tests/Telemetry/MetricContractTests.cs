@@ -21,7 +21,9 @@ public class MetricContractTests
     [Fact]
     public void All_Contract_Instruments_Are_Published_On_The_AdoMcpBridge_Meter()
     {
-        _ = BridgeMeter.MeterName;
+        // Touch a static *field* (not the const MeterName) to force the
+        // static field initializers — and thus instrument creation — to run.
+        _ = BridgeMeter.Meter;
 
         var seen = new HashSet<string>();
         using var listener = new MeterListener
