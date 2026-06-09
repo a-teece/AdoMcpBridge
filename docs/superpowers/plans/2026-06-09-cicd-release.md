@@ -69,7 +69,7 @@ bridge-version → Microsoft Remote MCP API mapping.
 
 **Do not open a public GitHub issue for security reports.**
 
-Email: `security@enate.net` (PGP key fingerprint published at
+Email: `<security contact — see repository Security tab>` (PGP key fingerprint published at
 `https://github.com/<owner>/AdoMcpBridge/blob/main/.github/security-pgp.asc`).
 
 We acknowledge within **2 business days** and aim to ship a fix or
@@ -754,7 +754,7 @@ param(
     [Parameter(Mandatory)] [ValidatePattern('^v\d+\.\d+\.\d+(-[A-Za-z0-9\.\-]+)?$')] [string] $Tag,
     [Parameter(Mandatory)] [ValidatePattern('^[0-9a-fA-F-]{36}$')] [string] $SubscriptionId,
     [Parameter(Mandatory)] [ValidateNotNullOrEmpty()] [string] $ResourceGroup,
-    [Parameter()] [string] $ImageOwner = 'enateltd'
+    [Parameter()] [string] $ImageOwner = 'a-teece'
 )
 
 Set-StrictMode -Version Latest
@@ -1054,7 +1054,7 @@ permissions:
 
 jobs:
   prod:
-    uses: enateltd/AdoMcpBridge/.github/workflows/reusable-cd.yml@v0.1.0
+    uses: a-teece/AdoMcpBridge/.github/workflows/reusable-cd.yml@v0.1.0
     with:
       tag: ${{ inputs.tag }}
       environment: prod
