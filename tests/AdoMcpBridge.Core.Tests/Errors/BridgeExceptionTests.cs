@@ -18,5 +18,12 @@ public class BridgeExceptionTests
         a.ErrorId.Should().NotBeNullOrWhiteSpace();
         a.ErrorId.Should().NotBe(b.ErrorId);
         a.ErrorCode.Should().Be("test_code");
+        a.StatusCode.Should().Be(500); // base default
+    }
+
+    [Fact]
+    public void Default_StatusCode_Is_500()
+    {
+        new TestEx().StatusCode.Should().Be(500);
     }
 }
