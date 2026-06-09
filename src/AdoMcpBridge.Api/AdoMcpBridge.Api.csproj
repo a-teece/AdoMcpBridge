@@ -7,5 +7,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\AdoMcpBridge.Core\AdoMcpBridge.Core.csproj" />
+    <ProjectReference Include="..\AdoMcpBridge.Analyzers\AdoMcpBridge.Analyzers.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>

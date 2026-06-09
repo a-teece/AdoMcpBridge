@@ -4,4 +4,9 @@
     <AssemblyName>AdoMcpBridge.Core</AssemblyName>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AdoMcpBridge.Analyzers\AdoMcpBridge.Analyzers.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
 </Project>
