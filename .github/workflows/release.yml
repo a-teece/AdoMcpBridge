@@ -3,6 +3,9 @@ name: release
 on:
   push:
     tags: ["v*.*.*"]
+  # Tags pushed by GITHUB_TOKEN (e.g. release-please) don't trigger
+  # workflows; this allows running the release manually against a tag ref.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -117,7 +120,8 @@ jobs:
           tag = os.environ["TAG"]
           version = tag.lstrip("v")
           text = pathlib.Path("CHANGELOG.md").read_text()
-          pattern = rf"## \[{re.escape(version)}\][^\n]*\n(.*?)(?=\n## \[|\Z)"
+          # release-please writes "## 0.1.0 (date)"; Keep-a-Changelog uses "## [0.1.0]".
+          pattern = rf"## \[?{re.escape(version)}\]?[^\n]*\n(.*?)(?=\n## |\Z)"
           m = re.search(pattern, text, re.DOTALL)
           body = m.group(1).strip() if m else f"Release {tag}."
           print("body<<EOF")
