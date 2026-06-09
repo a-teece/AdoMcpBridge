@@ -129,6 +129,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
+          # Tags with a hyphenated suffix (v1.2.3-rc1, -beta.2, ...) are pre-releases.
+          prerelease: ${{ contains(steps.ver.outputs.tag, '-') }}
           name: ${{ steps.ver.outputs.tag }}
           body: ${{ steps.notes.outputs.body }}
           fail_on_unmatched_files: true
