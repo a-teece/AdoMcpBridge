@@ -16,6 +16,9 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing.XUnit" Version="1.1.2" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+    <!-- 8.0.x aligns with the harness's ReferenceAssemblies.Net.Net80 so the
+         in-memory test compilation's System.Runtime matches (avoids CS1705). -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\AdoMcpBridge.Analyzers\AdoMcpBridge.Analyzers.csproj" />

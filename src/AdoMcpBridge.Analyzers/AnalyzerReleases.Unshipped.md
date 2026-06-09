@@ -1,5 +1,5 @@
 ; Unshipped analyzer release
-; Rules are added to this file in the task that implements each analyzer
-; (ADOMCP001 in the NoTokenIntoLogger task, ADOMCP002 in the
-; ExcludeFromCoverageJustification task) so that every intermediate build
-; satisfies the RS2002 release-tracking analyzer.
+### New Rules
+Rule ID | Category | Severity | Notes
+--------|----------|----------|------
+ADOMCP001 | Security | Error | NoTokenIntoLoggerAnalyzer: forbids tokens/codes/PKCE verifiers being passed to ILogger
