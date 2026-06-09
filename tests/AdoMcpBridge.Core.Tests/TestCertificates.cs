@@ -14,4 +14,11 @@ internal static class TestCertificates
         var pfx = cert.Export(X509ContentType.Pfx, "x");
         return X509CertificateLoader.LoadPkcs12(pfx, "x", X509KeyStorageFlags.Exportable);
     }
+
+    /// <summary>A certificate with no private key (public DER only).</summary>
+    public static X509Certificate2 CreatePublicOnly()
+    {
+        using var withKey = CreateSelfSigned();
+        return X509CertificateLoader.LoadCertificate(withKey.Export(X509ContentType.Cert));
+    }
 }

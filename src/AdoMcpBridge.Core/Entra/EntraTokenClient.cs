@@ -99,8 +99,12 @@ public sealed class EntraTokenClient : IEntraTokenClient
                 rejectionFailure, (int)response.StatusCode, errorCode, "Entra rejected the token request.");
         }
 
-        var accessToken = root.GetProperty("access_token").GetString()
-            ?? throw new EntraAuthException(EntraAuthFailure.Unknown, null, null, "Entra response missing access_token.");
+        var accessToken = root.TryGetProperty("access_token", out var atEl) ? atEl.GetString() : null;
+        if (string.IsNullOrEmpty(accessToken))
+        {
+            throw new EntraAuthException(EntraAuthFailure.Unknown, null, null, "Entra response missing access_token.");
+        }
+
         var refreshToken = root.TryGetProperty("refresh_token", out var rt) ? rt.GetString() : null;
         if (string.IsNullOrEmpty(refreshToken))
         {
@@ -109,8 +113,11 @@ public sealed class EntraTokenClient : IEntraTokenClient
         }
 
         var expiresIn = root.TryGetProperty("expires_in", out var ei) ? ei.GetInt32() : 3600;
-        var idToken = root.GetProperty("id_token").GetString()
-            ?? throw new EntraAuthException(EntraAuthFailure.Unknown, null, null, "Entra response missing id_token.");
+        var idToken = root.TryGetProperty("id_token", out var idEl) ? idEl.GetString() : null;
+        if (string.IsNullOrEmpty(idToken))
+        {
+            throw new EntraAuthException(EntraAuthFailure.Unknown, null, null, "Entra response missing id_token.");
+        }
 
         var (oid, upn) = ParseIdentity(idToken);
 
@@ -189,12 +196,7 @@ public sealed class EntraTokenClient : IEntraTokenClient
     private static byte[] Base64UrlDecode(string value)
     {
         var s = value.Replace('-', '+').Replace('_', '/');
-        switch (s.Length % 4)
-        {
-            case 2: s += "=="; break;
-            case 3: s += "="; break;
-            default: break;
-        }
-        return Convert.FromBase64String(s);
+        var padding = (4 - (s.Length % 4)) % 4;
+        return Convert.FromBase64String(s + new string('=', padding));
     }
 }

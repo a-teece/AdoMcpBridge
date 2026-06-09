@@ -140,6 +140,52 @@ public sealed class EntraTokenClientTests
     }
 
     [Fact]
+    public async Task ExchangeAuthorizationCodeAsync_malformed_id_token_throws()
+    {
+        await using var wm = WireMockEntra.Start();
+        var opts = OptionsFor(wm);
+        wm.StubTokenEndpoint(200, new
+        {
+            token_type = "Bearer",
+            expires_in = 3600,
+            access_token = "ado-access-token-value",
+            refresh_token = "entra-refresh-token-value",
+            id_token = "notajwt",
+        });
+
+        var sut = NewClient(opts);
+
+        var act = async () => await sut.ExchangeAuthorizationCodeAsync("c", "v", "https://localhost/cb", CancellationToken.None);
+
+        var ex = await act.Should().ThrowAsync<EntraAuthException>();
+        ex.Which.Failure.Should().Be(EntraAuthFailure.Unknown);
+    }
+
+    [Fact]
+    public async Task ExchangeAuthorizationCodeAsync_id_token_without_oid_throws()
+    {
+        await using var wm = WireMockEntra.Start();
+        var opts = OptionsFor(wm);
+        // Three-segment token whose payload base64url-decodes to "{}" (no oid claim).
+        // "e30" is base64url("{}"); its length (3) also exercises the %4==3 padding path.
+        wm.StubTokenEndpoint(200, new
+        {
+            token_type = "Bearer",
+            expires_in = 3600,
+            access_token = "ado-access-token-value",
+            refresh_token = "entra-refresh-token-value",
+            id_token = "aaa.e30.bbb",
+        });
+
+        var sut = NewClient(opts);
+
+        var act = async () => await sut.ExchangeAuthorizationCodeAsync("c", "v", "https://localhost/cb", CancellationToken.None);
+
+        var ex = await act.Should().ThrowAsync<EntraAuthException>();
+        ex.Which.Failure.Should().Be(EntraAuthFailure.Unknown);
+    }
+
+    [Fact]
     public async Task AcquireAdoTokenAsync_maps_transport_failure_to_Transport_failure()
     {
         var opts = new EntraOptions
@@ -159,4 +205,146 @@ public sealed class EntraTokenClientTests
         var ex = await act.Should().ThrowAsync<EntraAuthException>();
         ex.Which.Failure.Should().Be(EntraAuthFailure.Transport);
     }
+
+    [Fact]
+    public async Task Failure_without_error_property_yields_null_error_code()
+    {
+        await using var wm = WireMockEntra.Start();
+        var opts = OptionsFor(wm);
+        wm.StubTokenEndpoint(500, new { unrelated = "x" });
+
+        var sut = NewClient(opts);
+
+        var ex = await ((Func<Task>)(async () =>
+            await sut.AcquireAdoTokenAsync("rt", CancellationToken.None))).Should().ThrowAsync<EntraAuthException>();
+        ex.Which.StatusCode.Should().Be(500);
+        ex.Which.EntraErrorCode.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Null_access_token_throws()
+    {
+        await using var wm = WireMockEntra.Start();
+        var opts = OptionsFor(wm);
+        wm.StubTokenEndpoint(200, new
+        {
+            access_token = (string?)null,
+            refresh_token = "rt",
+            id_token = wm.IssueIdToken("oid", "u@example.com"),
+        });
+
+        var sut = NewClient(opts);
+
+        var ex = await ((Func<Task>)(async () =>
+            await sut.ExchangeAuthorizationCodeAsync("c", "v", "https://localhost/cb", CancellationToken.None)))
+            .Should().ThrowAsync<EntraAuthException>();
+        ex.Which.Failure.Should().Be(EntraAuthFailure.Unknown);
+    }
+
+    [Fact]
+    public async Task Null_id_token_throws()
+    {
+        await using var wm = WireMockEntra.Start();
+        var opts = OptionsFor(wm);
+        wm.StubTokenEndpoint(200, new
+        {
+            access_token = "at",
+            refresh_token = "rt",
+            expires_in = 3600,
+            id_token = (string?)null,
+        });
+
+        var sut = NewClient(opts);
+
+        var ex = await ((Func<Task>)(async () =>
+            await sut.ExchangeAuthorizationCodeAsync("c", "v", "https://localhost/cb", CancellationToken.None)))
+            .Should().ThrowAsync<EntraAuthException>();
+        ex.Which.Failure.Should().Be(EntraAuthFailure.Unknown);
+    }
+
+    [Fact]
+    public async Task Missing_expires_in_defaults_and_authority_without_v2_suffix_works()
+    {
+        await using var wm = WireMockEntra.Start();
+        var opts = OptionsFor(wm);
+        // Authority without the "/v2.0" suffix exercises the alternate token-endpoint derivation.
+        opts.Authority = $"{wm.Server.Url}/{wm.TenantId}";
+        wm.StubTokenEndpoint(200, new
+        {
+            access_token = "at",
+            refresh_token = "rt",
+            id_token = wm.IssueIdToken("oid-x", "u@example.com"),
+        });
+
+        var sut = NewClient(opts);
+
+        var result = await sut.ExchangeAuthorizationCodeAsync("c", "v", "https://localhost/cb", CancellationToken.None);
+
+        result.UserObjectId.Should().Be("oid-x");
+    }
+
+    [Fact]
+    public async Task Id_token_without_preferred_username_yields_empty_upn()
+    {
+        await using var wm = WireMockEntra.Start();
+        var opts = OptionsFor(wm);
+        var payload = Base64Url("{\"oid\":\"oid-only\"}"u8.ToArray());
+        wm.StubTokenEndpoint(200, new
+        {
+            access_token = "at",
+            refresh_token = "rt",
+            expires_in = 3600,
+            id_token = $"hdr.{payload}.sig",
+        });
+
+        var sut = NewClient(opts);
+
+        var result = await sut.ExchangeAuthorizationCodeAsync("c", "v", "https://localhost/cb", CancellationToken.None);
+
+        result.UserObjectId.Should().Be("oid-only");
+        result.UserPrincipalName.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Certificate_without_private_key_throws_CertificateUnavailable()
+    {
+        await using var wm = WireMockEntra.Start();
+        var opts = OptionsFor(wm);
+        wm.StubTokenEndpoint(200, new { access_token = "at", refresh_token = "rt", id_token = wm.IssueIdToken("o", "u") });
+
+        var certs = Substitute.For<ICertificateProvider>();
+        certs.GetCertificateAsync(Arg.Any<CancellationToken>())
+            .Returns(_ => new ValueTask<X509Certificate2>(TestCertificates.CreatePublicOnly()));
+        var sut = new EntraTokenClient(new HttpClient(), certs, Options.Create(opts),
+            new FixedClock(DateTimeOffset.UtcNow), NullLogger<EntraTokenClient>.Instance);
+
+        var ex = await ((Func<Task>)(async () =>
+            await sut.AcquireAdoTokenAsync("rt", CancellationToken.None))).Should().ThrowAsync<EntraAuthException>();
+        ex.Which.Failure.Should().Be(EntraAuthFailure.CertificateUnavailable);
+    }
+
+    [Fact]
+    public async Task Id_token_with_null_preferred_username_yields_empty_upn()
+    {
+        await using var wm = WireMockEntra.Start();
+        var opts = OptionsFor(wm);
+        var payload = Base64Url("{\"oid\":\"o2\",\"preferred_username\":null}"u8.ToArray());
+        wm.StubTokenEndpoint(200, new
+        {
+            access_token = "at",
+            refresh_token = "rt",
+            expires_in = 3600,
+            id_token = $"hdr.{payload}.sig",
+        });
+
+        var sut = NewClient(opts);
+
+        var result = await sut.ExchangeAuthorizationCodeAsync("c", "v", "https://localhost/cb", CancellationToken.None);
+
+        result.UserObjectId.Should().Be("o2");
+        result.UserPrincipalName.Should().BeEmpty();
+    }
+
+    private static string Base64Url(byte[] bytes) =>
+        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 }
