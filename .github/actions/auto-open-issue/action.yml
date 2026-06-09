@@ -1,0 +1,66 @@
+name: auto-open-issue
+description: >
+  Open a deduped GitHub Issue when a smoke run fails. Dedup by exact title:
+  if an open issue with the same title and label already exists, post a
+  comment instead of opening a duplicate.
+inputs:
+  title:
+    description: Issue title. Used as the dedup key.
+    required: true
+  body:
+    description: Markdown body. Workflow log URL is appended automatically.
+    required: true
+  label:
+    description: Label to apply (and dedup against).
+    required: false
+    default: smoke-failure
+  github-token:
+    description: GITHUB_TOKEN with issues:write.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Ensure label exists
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        if ! gh label list --limit 200 | awk '{print $1}' | grep -Fxq "${{ inputs.label }}"; then
+          gh label create "${{ inputs.label }}" \
+            --description "Nightly smoke test failure" \
+            --color B60205
+        fi
+
+    - name: Open or comment
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        TITLE: ${{ inputs.title }}
+        BODY: ${{ inputs.body }}
+        LABEL: ${{ inputs.label }}
+      run: |
+        set -euo pipefail
+        FULL_BODY=$(printf '%s\n\nWorkflow log: %s\nRun attempt: %s\nCommit: %s\n' \
+          "$BODY" "$RUN_URL" "${{ github.run_attempt }}" "${{ github.sha }}")
+
+        # Dedup by exact title match within open issues carrying the label.
+        EXISTING=$(gh issue list \
+          --state open \
+          --label "$LABEL" \
+          --search "in:title \"$TITLE\"" \
+          --json number,title \
+          --jq ".[] | select(.title == \"$TITLE\") | .number" \
+          | head -n1)
+
+        if [ -n "$EXISTING" ]; then
+          echo "Existing issue #$EXISTING matches title; commenting."
+          gh issue comment "$EXISTING" --body "$FULL_BODY"
+        else
+          echo "No matching open issue; creating new."
+          gh issue create \
+            --title "$TITLE" \
+            --body "$FULL_BODY" \
+            --label "$LABEL"
+        fi
