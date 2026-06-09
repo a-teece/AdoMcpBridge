@@ -8,6 +8,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOptions<AdoMcpOptions>().Bind(builder.Configuration.GetSection("AdoMcp"));
 builder.Services.AddSingleton<WrapperTokenMinter>();
 builder.Services.AddSingleton<PkceValidator>();
+builder.Services.AddSingleton<AuthorizeRequestValidator>();
+builder.Services.AddSingleton<IAuthorizationSessionCache, InMemoryAuthorizationSessionCache>();
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddRazorPages();
 
