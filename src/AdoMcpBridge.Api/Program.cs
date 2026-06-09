@@ -1,5 +1,6 @@
 using AdoMcpBridge.Api.Endpoints;
 using AdoMcpBridge.Api.Options;
+using AdoMcpBridge.Api.Proxy;
 using AdoMcpBridge.Core.Abstractions;
 using AdoMcpBridge.Core.OAuth;
 using AdoMcpBridge.Core.Time;
@@ -12,9 +13,12 @@ builder.Services.AddSingleton<AuthorizeRequestValidator>();
 builder.Services.AddSingleton<IAuthorizationSessionCache, InMemoryAuthorizationSessionCache>();
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddRazorPages();
+builder.Services.AddMcpProxy(builder.Configuration);
 
 var app = builder.Build();
+app.UseMcpProxy();
 app.MapGet("/healthz", () => Results.Ok("ok"));
+app.MapConnectorInfo();
 app.MapMetadata();
 app.MapRegister();
 app.MapConsentSubmit();
