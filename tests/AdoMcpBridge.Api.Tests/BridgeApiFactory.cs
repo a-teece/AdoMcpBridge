@@ -25,6 +25,9 @@ public class BridgeApiFactory : WebApplicationFactory<Program>
             {
                 ["AdoMcp:Issuer"] = "https://test.local",
                 ["AdoMcp:UpstreamBaseUrl"] = "https://mcp.test.local",
+                ["AdoMcp:Entra:TenantId"] = "tid",
+                ["AdoMcp:Entra:ClientId"] = "wrapper-app",
+                ["AdoMcp:Entra:Authority"] = "https://login.microsoftonline.com/tid/v2.0",
             });
         });
         builder.ConfigureServices(s =>

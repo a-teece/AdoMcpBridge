@@ -17,6 +17,7 @@ var app = builder.Build();
 app.MapGet("/healthz", () => Results.Ok("ok"));
 app.MapMetadata();
 app.MapRegister();
+app.MapConsentSubmit();
 app.MapRazorPages();
 await app.RunAsync();
 
