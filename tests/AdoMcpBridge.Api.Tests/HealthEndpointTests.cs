@@ -1,12 +1,10 @@
-using Microsoft.AspNetCore.Mvc.Testing;
-
 namespace AdoMcpBridge.Api.Tests;
 
-public sealed class HealthEndpointTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class HealthEndpointTests : IClassFixture<BridgeApiFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly BridgeApiFactory _factory;
 
-    public HealthEndpointTests(WebApplicationFactory<Program> factory) => _factory = factory;
+    public HealthEndpointTests(BridgeApiFactory factory) => _factory = factory;
 
     [Fact]
     public async Task Healthz_returns_success_with_ok_body()
