@@ -13,7 +13,9 @@
          is irrelevant in test hosts; CA1861 inline constant arrays in asserts;
          CA1515 public test types are required by the xUnit runner;
          CA1711 the xUnit [CollectionDefinition] idiom names the class
-         '<Name>Collection'. -->
-    <NoWarn>$(NoWarn);CA1707;CA1859;CA2007;CA1861;CA1515;CA1711</NoWarn>
+         '<Name>Collection'; CA2012 ValueTask used as the receiver of an
+         NSubstitute .Returns() setup (safe in mocking); CA1001 throwaway
+         test HttpClient factory need not be disposable. -->
+    <NoWarn>$(NoWarn);CA1707;CA1859;CA2007;CA1861;CA1515;CA1711;CA2012;CA1001</NoWarn>
   </PropertyGroup>
 </Project>
