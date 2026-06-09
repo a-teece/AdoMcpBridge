@@ -14,4 +14,8 @@
   <ItemGroup>
     <PackageReference Include="Yarp.ReverseProxy" Version="2.2.0" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Proxy helpers/middleware are internal; the test project exercises them directly. -->
+    <InternalsVisibleTo Include="AdoMcpBridge.Api.Tests" />
+  </ItemGroup>
 </Project>
