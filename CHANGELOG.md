@@ -1,0 +1,12 @@
+# Changelog
+
+All notable changes to **ADO MCP Bridge** are documented here.
+This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
+and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
+`release-please` maintains entries below this line from Conventional
+Commit messages — do not hand-edit released sections.
+
+## [Unreleased]
+
+### Added
+- Initial scaffolding.

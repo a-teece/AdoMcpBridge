@@ -1,0 +1,28 @@
+# Drop this into <adopter-repo>/.github/workflows/deploy-adomcp.yml and
+# adjust inputs. Requires an Entra federated identity credential whose
+# subject matches `repo:<adopter-owner>/<adopter-repo>:environment:prod`.
+name: deploy-adomcp
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Bridge tag to deploy (e.g. v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  prod:
+    uses: a-teece/AdoMcpBridge/.github/workflows/reusable-cd.yml@v0.1.0
+    with:
+      tag: ${{ inputs.tag }}
+      environment: prod
+      subscription_id: 00000000-0000-0000-0000-000000000000
+      tenant_id:       00000000-0000-0000-0000-000000000000
+      resource_group:  rg-adomcp-prod
+    secrets:
+      azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
