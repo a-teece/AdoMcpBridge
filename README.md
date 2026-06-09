@@ -87,3 +87,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md). Design rationale lives in
 [`docs/specs/2026-06-09-ado-mcp-bridge-design.md`](docs/specs/2026-06-09-ado-mcp-bridge-design.md).
 Security issues: use GitHub's private vulnerability reporting (the
 **Security** tab) — never a public issue.
+
+## License
+
+[MIT](LICENSE).
