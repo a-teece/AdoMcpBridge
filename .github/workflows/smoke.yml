@@ -1,0 +1,76 @@
+name: smoke
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Smoke tests (dev)
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore tests/AdoMcpBridge.Smoke/AdoMcpBridge.Smoke.csproj
+
+      - name: Build
+        run: dotnet build tests/AdoMcpBridge.Smoke/AdoMcpBridge.Smoke.csproj --configuration Release --no-restore
+
+      - name: Run smoke tests
+        id: smoke
+        env:
+          ADOMCP_BRIDGE_URL: ${{ vars.ADOMCP_BRIDGE_URL }}
+          ADOMCP_SMOKE_REFRESH_TOKEN: ${{ secrets.ADOMCP_SMOKE_REFRESH_TOKEN }}
+          ADOMCP_SMOKE_CLIENT_ID: ${{ secrets.ADOMCP_SMOKE_CLIENT_ID }}
+        run: |
+          dotnet test tests/AdoMcpBridge.Smoke/AdoMcpBridge.Smoke.csproj \
+            --configuration Release \
+            --no-build \
+            --filter "Category=smoke" \
+            --logger "trx;LogFileName=smoke.trx" \
+            --logger "console;verbosity=detailed" \
+            --results-directory artifacts/smoke
+
+      - name: Upload TRX
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-results-${{ github.run_id }}
+          path: artifacts/smoke/*.trx
+          if-no-files-found: warn
+
+      - name: Open issue on failure
+        if: failure()
+        uses: ./.github/actions/auto-open-issue
+        with:
+          title: "Smoke failure: ${{ github.event_name }} @ ${{ github.ref_name }}"
+          body: |
+            Nightly/on-release smoke run failed against the dev deployment.
+
+            - Event: `${{ github.event_name }}`
+            - Ref: `${{ github.ref_name }}`
+            - Target URL: `${{ vars.ADOMCP_BRIDGE_URL }}`
+
+            See attached TRX artifact for assertion details. No token values
+            are logged by the test project (only redacted length sentinels).
+          label: smoke-failure
+          github-token: ${{ secrets.GITHUB_TOKEN }}
