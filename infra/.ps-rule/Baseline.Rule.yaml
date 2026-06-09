@@ -1,0 +1,14 @@
+---
+apiVersion: github.com/microsoft/PSRule/v1
+kind: Baseline
+metadata:
+  name: AdoMcpBridge.Security
+spec:
+  rule:
+    include:
+      - 'Azure.KeyVault.*'
+      - 'Azure.ACR.*'
+      - 'Azure.SQL.*'
+      - 'Azure.AppInsights.*'
+      - 'Azure.ContainerApp.*'
+      - 'Azure.Identity.*'

@@ -1,0 +1,18 @@
+input:
+  pathIgnore:
+    - 'modules/*.json'
+binding:
+  targetType:
+    - resourceType
+configuration:
+  AZURE_BICEP_FILE_EXPANSION: false
+output:
+  culture:
+    - en-GB
+suppression:
+  Azure.ACR.MinSku:
+    - 'cradomcpdev'
+    - 'cradomcpprod'
+  Azure.ContainerApp.PublicAccess:
+    - 'ca-adomcp-dev'
+    - 'ca-adomcp-prod'
