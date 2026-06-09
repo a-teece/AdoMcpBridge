@@ -35,7 +35,19 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   }
 }
 
+resource actionGroup 'Microsoft.Insights/actionGroups@2023-01-01' = {
+  name: 'ag-adomcp-${env}'
+  location: 'global'
+  properties: {
+    groupShortName: 'adomcp${env}'
+    enabled: true
+    // Receivers (email/webhook/PagerDuty) are added out-of-band by the
+    // operator; the empty group is a valid alert target until then.
+  }
+}
+
 output workspaceId string = workspace.id
+output actionGroupId string = actionGroup.id
 output workspaceCustomerId string = workspace.properties.customerId
 #disable-next-line outputs-should-not-contain-secrets
 output workspaceSharedKey string = workspace.listKeys().primarySharedKey
