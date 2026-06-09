@@ -20,6 +20,7 @@ app.MapRegister();
 app.MapConsentSubmit();
 app.MapEntraCallback();
 app.MapToken();
+app.MapRevoke();
 app.MapRazorPages();
 await app.RunAsync();
 

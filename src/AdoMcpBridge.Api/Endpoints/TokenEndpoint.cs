@@ -74,7 +74,39 @@ public static class TokenEndpoint
         });
     }
 
-    private static Task<IResult> RefreshAsync(
+    private static async Task<IResult> RefreshAsync(
         IFormCollection form, ITokenStore store, WrapperTokenMinter minter, IClock clock, CancellationToken ct)
-        => Task.FromResult(BadRequest(OAuthError.UnsupportedGrantType("refresh_token not yet wired")));
+    {
+        var refresh = form["refresh_token"].ToString();
+        var clientId = form["client_id"].ToString();
+        if (string.IsNullOrEmpty(refresh) || string.IsNullOrEmpty(clientId))
+            return BadRequest(OAuthError.InvalidRequest("refresh_token and client_id required"));
+
+        var oldHash = minter.Hash(refresh);
+        var existing = await store.FindByRefreshTokenHashAsync(oldHash, ct);
+        if (existing is null) return BadRequest(OAuthError.InvalidGrant("unknown refresh_token"));
+        if (existing.ClientId != clientId) return BadRequest(OAuthError.InvalidGrant("client mismatch"));
+        if (existing.RefreshTokenExpiresAt <= clock.UtcNow)
+            return BadRequest(OAuthError.InvalidGrant("refresh_token expired"));
+
+        var pair = minter.MintPair();
+        var fresh = new TokenRecord(
+            AccessTokenHash: minter.Hash(pair.AccessToken),
+            RefreshTokenHash: minter.Hash(pair.RefreshToken),
+            ClientId: existing.ClientId,
+            EntraRefreshTokenEncrypted: existing.EntraRefreshTokenEncrypted,
+            UserObjectId: existing.UserObjectId,
+            UserPrincipalName: existing.UserPrincipalName,
+            AccessTokenExpiresAt: minter.AccessTokenExpiresAt,
+            RefreshTokenExpiresAt: minter.RefreshTokenExpiresAt,
+            CreatedAt: clock.UtcNow);
+        await store.ReplaceTokenAsync(existing, fresh, ct);
+
+        return Results.Json(new TokenResponse
+        {
+            AccessToken = pair.AccessToken,
+            RefreshToken = pair.RefreshToken,
+            ExpiresIn = 3600,
+        });
+    }
 }
