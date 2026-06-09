@@ -1,0 +1,47 @@
+name: pr-template-check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "infra/modules/observability.bicep"
+      - "infra/alerts/**"
+      - "docs/runbook.md"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  alert-runbook-gate:
+    name: New alert requires runbook entry
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect added alerts vs. added runbook entries
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          ADDED_ALERTS=$(git diff "$BASE_SHA".."$HEAD_SHA" -- \
+              infra/modules/observability.bicep infra/alerts/ \
+            | grep -E "^\+" | grep -v "^\+\+\+" \
+            | grep -Eci "Microsoft\.Insights/(metricAlerts|scheduledQueryRules)|resource[[:space:]]+\w+[[:space:]]+'Microsoft\.Insights/" \
+            || true)
+
+          ADDED_RUNBOOK=$(git diff "$BASE_SHA".."$HEAD_SHA" -- docs/runbook.md \
+            | grep -Ec "^\+### " \
+            || true)
+
+          echo "Added alert lines: $ADDED_ALERTS"
+          echo "Added runbook headings: $ADDED_RUNBOOK"
+
+          if [ "$ADDED_ALERTS" -gt 0 ] && [ "$ADDED_RUNBOOK" -lt 1 ]; then
+            echo "::error::PR introduces alert(s) under infra/modules/observability.bicep or infra/alerts/ but adds no '### ' entry to docs/runbook.md."
+            exit 1
+          fi

@@ -1,0 +1,112 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build, format, test (100% coverage)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      DOTNET_NOLOGO: "true"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore AdoMcpBridge.sln
+
+      - name: Verify formatting
+        run: dotnet format AdoMcpBridge.sln --verify-no-changes --severity error
+
+      - name: Build (Release)
+        run: dotnet build AdoMcpBridge.sln --configuration Release --no-restore
+
+      - name: Test with coverage gate
+        # Coverage Include/Exclude scope is defined per test project in
+        # Directory.Build.targets so this solution-wide run gates only the
+        # surfaces we drive to 100% (Core, Api.Middleware, Api.Proxy).
+        run: >-
+          dotnet test AdoMcpBridge.sln
+          --configuration Release
+          --logger "trx;LogFileName=test-results.trx"
+          /p:CollectCoverage=true
+          /p:Threshold=100
+          /p:ThresholdType=line,branch,method
+          /p:ThresholdStat=total
+          /p:CoverletOutputFormat=cobertura
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: "**/artifacts/coverage/**/*.cobertura.xml"
+          fail_ci_if_error: false
+          flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload test results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: "**/*.trx"
+          if-no-files-found: warn
+
+  deploy-script-tests:
+    name: Pester tests for deploy.ps1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pester and PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Install-Module Pester -MinimumVersion 5.5.0 -Force -Scope CurrentUser -SkipPublisherCheck
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser -SkipPublisherCheck
+
+      - name: Lint deploy.ps1
+        shell: pwsh
+        run: Invoke-ScriptAnalyzer -Path ./deploy.ps1 -Severity Warning,Error -EnableExit
+
+      - name: Run Pester
+        shell: pwsh
+        run: |
+          $cfg = New-PesterConfiguration
+          $cfg.Run.Path = './tests/deploy/deploy.Tests.ps1'
+          $cfg.Run.Exit = $true
+          $cfg.Output.Verbosity = 'Detailed'
+          $cfg.TestResult.Enabled = $true
+          $cfg.TestResult.OutputPath = './TestResults/deploy.pester.xml'
+          Invoke-Pester -Configuration $cfg
+
+      - name: Upload Pester results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-pester-results
+          path: TestResults/deploy.pester.xml
+          if-no-files-found: warn
