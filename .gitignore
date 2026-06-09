@@ -20,3 +20,7 @@ project.lock.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Bicep-compiled ARM (generated)
+infra/main.json
+infra/*.parameters.json
