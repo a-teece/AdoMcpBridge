@@ -1,0 +1,18 @@
+@* src/AdoMcpBridge.Api/Pages/Consent.cshtml *@
+@page "/authorize"
+@model AdoMcpBridge.Api.Pages.ConsentModel
+@{ Layout = null; }
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Authorize ADO MCP Bridge</title></head>
+<body>
+  <h1>Authorize @Model.ClientName</h1>
+  <p>@Model.ClientName is requesting access to Azure DevOps via the ADO MCP Bridge.</p>
+  <p>You will be redirected to <code>@Model.RedirectUri</code> after sign-in.</p>
+  <form method="post" action="/authorize/consent">
+    <input type="hidden" name="session_id" value="@Model.SessionId" />
+    <button type="submit" name="decision" value="approve">Approve</button>
+    <button type="submit" name="decision" value="deny">Deny</button>
+  </form>
+</body>
+</html>
