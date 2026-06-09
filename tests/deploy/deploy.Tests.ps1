@@ -6,7 +6,14 @@ BeforeAll {
     if (-not (Test-Path $script:DeployScript)) {
         throw "deploy.ps1 not found at $script:DeployScript"
     }
-    . $script:DeployScript
+    # The script's params are Mandatory, so even a dot-source must bind them.
+    # Supply dummy-but-valid values; the InvocationName guard inside the
+    # script prevents Invoke-Deploy from running when dot-sourced.
+    . $script:DeployScript `
+        -Env 'dev' `
+        -Tag 'v0.0.0' `
+        -SubscriptionId '00000000-0000-0000-0000-000000000000' `
+        -ResourceGroup 'rg-adomcp-pester'
 }
 
 Describe 'deploy.ps1 parameter validation' {

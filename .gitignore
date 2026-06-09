@@ -24,3 +24,6 @@ Thumbs.db
 # Bicep-compiled ARM (generated)
 infra/main.json
 infra/*.parameters.json
+
+# dotnet test output
+TestResults/

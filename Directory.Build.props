@@ -11,8 +11,10 @@
     <!-- CS1591: missing XML doc on public members (docs not required everywhere).
          CA1848: prefer LoggerMessage source-gen delegates — a perf micro-optimization
          not warranted for this low-throughput auth bridge; plain ILogger calls (per
-         spec's "built-in ILogger" decision) are intentional. -->
-    <NoWarn>$(NoWarn);CS1591;CA1848</NoWarn>
+         spec's "built-in ILogger" decision) are intentional.
+         CA1873: same family as CA1848 — flags arg expressions that evaluate even when
+         the log level is off. We accept the cost. -->
+    <NoWarn>$(NoWarn);CS1591;CA1848;CA1873</NoWarn>
     <DebugType>portable</DebugType>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>

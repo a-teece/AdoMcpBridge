@@ -30,6 +30,9 @@
         -ResourceGroup rg-adomcp-prod
 #>
 [CmdletBinding()]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+    'PSReviewUnusedParameter', '',
+    Justification = 'Script-level params are consumed by Invoke-Deploy via script scope; PSScriptAnalyzer cannot follow that flow.')]
 param(
     [Parameter(Mandatory)] [ValidateSet('dev', 'prod')] [string] $Env,
     [Parameter(Mandatory)] [ValidatePattern('^v\d+\.\d+\.\d+(-[A-Za-z0-9\.\-]+)?$')] [string] $Tag,
@@ -54,7 +57,7 @@ function Invoke-PreflightVerify {
         [Parameter(Mandatory)][string] $RepoUrl
     )
 
-    Write-Host "Verifying cosign signature on $ImageRef ..." -ForegroundColor Cyan
+    Write-Information "Verifying cosign signature on $ImageRef ..." -InformationAction Continue
     & cosign verify `
         --certificate-identity-regexp "^https://github\.com/$RepoUrl/\.github/workflows/release\.yml@refs/tags/" `
         --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' `
@@ -74,7 +77,7 @@ function Invoke-Deploy {
 
     Invoke-PreflightVerify -ImageRef $imageRef -RepoUrl $repoUrl
 
-    Write-Host "Setting subscription $SubscriptionId ..." -ForegroundColor Cyan
+    Write-Information "Setting subscription $SubscriptionId ..." -InformationAction Continue
     & az account set --subscription $SubscriptionId | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "az account set failed." }
 
@@ -83,7 +86,7 @@ function Invoke-Deploy {
         throw "Parameter file not found: $paramFile"
     }
 
-    Write-Host "Deploying $imageRef to $ResourceGroup ..." -ForegroundColor Cyan
+    Write-Information "Deploying $imageRef to $ResourceGroup ..." -InformationAction Continue
     & az deployment group create `
         --resource-group $ResourceGroup `
         --template-file (Join-Path $PSScriptRoot 'infra/main.bicep') `
@@ -93,7 +96,7 @@ function Invoke-Deploy {
 
     if ($LASTEXITCODE -ne 0) { throw "az deployment group create failed." }
 
-    Write-Host "Deployment complete." -ForegroundColor Green
+    Write-Information "Deployment complete." -InformationAction Continue
 }
 
 # Skip execution when dot-sourced (so Pester can test the functions).
