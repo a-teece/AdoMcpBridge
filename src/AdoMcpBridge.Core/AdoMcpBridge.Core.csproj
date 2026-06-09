@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>AdoMcpBridge.Core</RootNamespace>
+    <AssemblyName>AdoMcpBridge.Core</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+</Project>
