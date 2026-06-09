@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup Condition="'$(IsTestProject)' == 'true'">
+    <CollectCoverage Condition="'$(CollectCoverage)' == ''">false</CollectCoverage>
+    <CoverletOutputFormat>cobertura</CoverletOutputFormat>
+    <CoverletOutput>$(MSBuildThisFileDirectory)artifacts/coverage/$(MSBuildProjectName)/</CoverletOutput>
+    <Exclude>[xunit.*]*,[*.Tests]*</Exclude>
+    <ExcludeByAttribute>Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
+    <DeterministicSourcePaths>false</DeterministicSourcePaths>
+    <SkipAutoProps>true</SkipAutoProps>
+  </PropertyGroup>
+</Project>

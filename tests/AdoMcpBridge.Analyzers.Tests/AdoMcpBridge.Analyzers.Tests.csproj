@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>AdoMcpBridge.Analyzers.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!-- The analyzer-testing harness (1.1.2) transitively restores the
+         .NET Framework-only Microsoft.CodeAnalysis.*.Workspaces 1.0.1 and
+         Microsoft.Composition 1.0.27. NU1701 is a transitive restore-compat
+         warning on a test-only dependency, not a defect in our code, so it
+         is demoted from error here only. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1701</WarningsNotAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing.XUnit" Version="1.1.2" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AdoMcpBridge.Analyzers\AdoMcpBridge.Analyzers.csproj" />
+  </ItemGroup>
+</Project>
