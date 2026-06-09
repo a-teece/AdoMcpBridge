@@ -1,4 +1,5 @@
 using AdoMcpBridge.Api.Middleware;
+using Yarp.ReverseProxy.Transforms;
 
 namespace AdoMcpBridge.Api.Proxy;
 
@@ -6,7 +7,16 @@ internal static class YarpRegistration
 {
     public static IServiceCollection AddMcpProxy(this IServiceCollection services, IConfiguration config)
     {
-        services.AddReverseProxy().LoadFromConfig(config.GetSection("ReverseProxy"));
+        services.AddReverseProxy()
+            .LoadFromConfig(config.GetSection("ReverseProxy"))
+            .AddTransforms(builderCtx =>
+            {
+                // The header allowlist is authoritative: do not let YARP inject its
+                // own X-Forwarded-* headers, which would otherwise reach upstream.
+                builderCtx.UseDefaultForwarders = false;
+                builderCtx.AddResponseTransform(transformCtx =>
+                    new UpstreamErrorTransform().ApplyAsync(transformCtx));
+            });
         return services;
     }
 

@@ -1,0 +1,54 @@
+using AdoMcpBridge.Core.Abstractions;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using NSubstitute;
+using WireMock.Server;
+
+namespace AdoMcpBridge.Api.Tests.Proxy;
+
+public sealed class ProxyTestFixture : WebApplicationFactory<Program>, IAsyncDisposable
+{
+    public WireMockServer Upstream { get; } = WireMockServer.Start();
+    public IEntraTokenClient EntraClient { get; } = Substitute.For<IEntraTokenClient>();
+    public IKeyVaultEncryptor Encryptor { get; } = Substitute.For<IKeyVaultEncryptor>();
+    public ITokenStore TokenStore { get; } = Substitute.For<ITokenStore>();
+    public IClock Clock { get; } = new TestClock { UtcNow = new DateTimeOffset(2026, 6, 9, 12, 0, 0, TimeSpan.Zero) };
+
+    public sealed class TestClock : IClock { public DateTimeOffset UtcNow { get; set; } }
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.ConfigureAppConfiguration((_, cfg) =>
+        {
+            cfg.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ReverseProxy:Routes:mcp:ClusterId"] = "ado-mcp",
+                ["ReverseProxy:Routes:mcp:Match:Path"] = "/mcp/{**catch-all}",
+                ["ReverseProxy:Routes:mcp:Transforms:0:PathPattern"] = "/{**catch-all}",
+                ["ReverseProxy:Clusters:ado-mcp:Destinations:primary:Address"] = Upstream.Urls[0],
+                ["AdoMcp:Issuer"] = "https://localhost",
+            });
+        });
+        builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<IEntraTokenClient>();
+            services.RemoveAll<IKeyVaultEncryptor>();
+            services.RemoveAll<ITokenStore>();
+            services.RemoveAll<IClock>();
+            services.AddSingleton(EntraClient);
+            services.AddSingleton(Encryptor);
+            services.AddSingleton(TokenStore);
+            services.AddSingleton(Clock);
+        });
+    }
+
+    public new async ValueTask DisposeAsync()
+    {
+        Upstream.Stop();
+        Upstream.Dispose();
+        await base.DisposeAsync();
+    }
+}
