@@ -3,10 +3,14 @@
     <CollectCoverage Condition="'$(CollectCoverage)' == ''">false</CollectCoverage>
     <CoverletOutputFormat>cobertura</CoverletOutputFormat>
     <CoverletOutput>$(MSBuildThisFileDirectory)artifacts/coverage/$(MSBuildProjectName)/</CoverletOutput>
-    <Exclude>[xunit.*]*,[*.Tests]*</Exclude>
+    <Exclude>[xunit.*]*,[*.Tests]*,[*]AdoMcpBridge.Core.Data.Migrations.*</Exclude>
     <ExcludeByAttribute>Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
     <DeterministicSourcePaths>false</DeterministicSourcePaths>
     <SkipAutoProps>true</SkipAutoProps>
+    <!-- Coverage scope per test project, so a solution-wide `dotnet test`
+         100% gate measures only the surfaces each plan drove to 100%. -->
+    <Include Condition="'$(MSBuildProjectName)' == 'AdoMcpBridge.Core.Tests'">[AdoMcpBridge.Core]*</Include>
+    <Include Condition="'$(MSBuildProjectName)' == 'AdoMcpBridge.Api.Tests'">[AdoMcpBridge.Api]AdoMcpBridge.Api.Middleware.*,[AdoMcpBridge.Api]AdoMcpBridge.Api.Proxy.*</Include>
     <!-- Relax analyzer rules that fight idiomatic test code:
          CA1707 underscored test method names; CA1859 interface-typed locals
          (tests assert against abstractions deliberately); CA2007 ConfigureAwait

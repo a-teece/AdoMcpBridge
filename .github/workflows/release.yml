@@ -1,0 +1,138 @@
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write   # required for cosign keyless + GHCR OIDC
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/adomcpbridge
+
+jobs:
+  build-and-release:
+    name: Build, sign, package, release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: ver
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/AdoMcpBridge.Api/Dockerfile
+          push: true
+          provenance: true
+          sbom: false
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.ver.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.ver.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: v2.4.1
+
+      - name: Sign image (keyless)
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          cosign sign --yes \
+            "${REGISTRY}/${IMAGE_NAME}@${{ steps.build.outputs.digest }}"
+
+      - name: Generate SBOM (SPDX JSON)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.ver.outputs.tag }}
+          format: spdx-json
+          output-file: ./adomcpbridge-${{ steps.ver.outputs.tag }}.sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Attest SBOM to image
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          cosign attest --yes \
+            --predicate "./adomcpbridge-${{ steps.ver.outputs.tag }}.sbom.spdx.json" \
+            --type spdxjson \
+            "${REGISTRY}/${IMAGE_NAME}@${{ steps.build.outputs.digest }}"
+
+      - name: Package Bicep templates
+        run: |
+          mkdir -p dist
+          (cd infra && zip -r "../dist/bicep-${{ steps.ver.outputs.tag }}.zip" .)
+
+      - name: Stage deploy.ps1
+        run: cp deploy.ps1 "dist/deploy-${{ steps.ver.outputs.tag }}.ps1"
+
+      - name: Stage SBOM
+        run: cp "./adomcpbridge-${{ steps.ver.outputs.tag }}.sbom.spdx.json" dist/
+
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import os, re, pathlib
+          tag = os.environ["TAG"]
+          version = tag.lstrip("v")
+          text = pathlib.Path("CHANGELOG.md").read_text()
+          pattern = rf"## \[{re.escape(version)}\][^\n]*\n(.*?)(?=\n## \[|\Z)"
+          m = re.search(pattern, text, re.DOTALL)
+          body = m.group(1).strip() if m else f"Release {tag}."
+          print("body<<EOF")
+          print(body)
+          print("EOF")
+          PY
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }}
+          body: ${{ steps.notes.outputs.body }}
+          fail_on_unmatched_files: true
+          files: |
+            dist/bicep-${{ steps.ver.outputs.tag }}.zip
+            dist/deploy-${{ steps.ver.outputs.tag }}.ps1
+            dist/adomcpbridge-${{ steps.ver.outputs.tag }}.sbom.spdx.json
