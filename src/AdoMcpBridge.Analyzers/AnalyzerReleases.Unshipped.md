@@ -3,3 +3,4 @@
 Rule ID | Category | Severity | Notes
 --------|----------|----------|------
 ADOMCP001 | Security | Error | NoTokenIntoLoggerAnalyzer: forbids tokens/codes/PKCE verifiers being passed to ILogger
+ADOMCP002 | Coverage | Error | ExcludeFromCoverageJustificationAnalyzer: requires non-empty Justification
