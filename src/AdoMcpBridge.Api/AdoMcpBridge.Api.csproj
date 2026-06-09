@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>AdoMcpBridge.Api</RootNamespace>
+    <AssemblyName>AdoMcpBridge.Api</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <UserSecretsId>adomcp-bridge-api</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AdoMcpBridge.Core\AdoMcpBridge.Core.csproj" />
+    <ProjectReference Include="..\AdoMcpBridge.Analyzers\AdoMcpBridge.Analyzers.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+</Project>

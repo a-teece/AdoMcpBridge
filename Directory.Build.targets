@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup Condition="'$(IsTestProject)' == 'true'">
+    <CollectCoverage Condition="'$(CollectCoverage)' == ''">false</CollectCoverage>
+    <CoverletOutputFormat>cobertura</CoverletOutputFormat>
+    <CoverletOutput>$(MSBuildThisFileDirectory)artifacts/coverage/$(MSBuildProjectName)/</CoverletOutput>
+    <Exclude>[xunit.*]*,[*.Tests]*</Exclude>
+    <ExcludeByAttribute>Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
+    <DeterministicSourcePaths>false</DeterministicSourcePaths>
+    <SkipAutoProps>true</SkipAutoProps>
+    <!-- Relax analyzer rules that fight idiomatic test code:
+         CA1707 underscored test method names; CA1859 interface-typed locals
+         (tests assert against abstractions deliberately); CA2007 ConfigureAwait
+         is irrelevant in test hosts; CA1861 inline constant arrays in asserts;
+         CA1515 public test types are required by the xUnit runner. -->
+    <NoWarn>$(NoWarn);CA1707;CA1859;CA2007;CA1861;CA1515</NoWarn>
+  </PropertyGroup>
+</Project>

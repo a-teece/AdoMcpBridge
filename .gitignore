@@ -1,0 +1,22 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+artifacts/
+
+# Coverage
+*.cobertura.xml
+coverage*.json
+coverage*.xml
+*.coverage
+
+# .NET / Rider / VS
+.vs/
+.idea/
+*.user
+*.suo
+project.lock.json
+
+# OS
+.DS_Store
+Thumbs.db
