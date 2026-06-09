@@ -4,8 +4,14 @@ on:
   push:
     tags: ["v*.*.*"]
   # Tags pushed by GITHUB_TOKEN (e.g. release-please) don't trigger
-  # workflows; this allows running the release manually against a tag ref.
+  # workflows; this allows releasing an existing tag manually. Dispatch
+  # runs on main's workflow file and checks out the supplied tag.
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and release (e.g. v0.1.0)."
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -29,11 +35,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Extract version
         id: ver
+        env:
+          TAG_INPUT: ${{ inputs.tag }}
         run: |
-          TAG="${GITHUB_REF_NAME}"
+          TAG="${TAG_INPUT:-$GITHUB_REF_NAME}"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
