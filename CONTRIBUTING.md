@@ -63,9 +63,9 @@ tests at the project's coverage target, will be rejected.
 
 ## Reporting security issues
 
-See [`SECURITY.md`](SECURITY.md) (added with the implementation plan)
-for the private disclosure process. Do **not** open public issues for
-suspected vulnerabilities.
+Use GitHub's private vulnerability reporting via the repository's
+**Security** tab. Do **not** open public issues for suspected
+vulnerabilities.
 
 ## Where to start
 
