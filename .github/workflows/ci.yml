@@ -55,7 +55,7 @@ jobs:
           --logger "trx;LogFileName=test-results.trx"
           /p:CollectCoverage=true
           /p:Threshold=100
-          /p:ThresholdType=line,branch,method
+          /p:ThresholdType=line%2Cbranch%2Cmethod
           /p:ThresholdStat=total
           /p:CoverletOutputFormat=cobertura
 
