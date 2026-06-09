@@ -14,6 +14,7 @@ builder.Services.AddRazorPages();
 var app = builder.Build();
 app.MapGet("/healthz", () => Results.Ok("ok"));
 app.MapMetadata();
+app.MapRegister();
 app.MapRazorPages();
 await app.RunAsync();
 
