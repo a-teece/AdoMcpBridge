@@ -1,11 +1,13 @@
 using AdoMcpBridge.Api.Endpoints;
 using AdoMcpBridge.Api.Options;
 using AdoMcpBridge.Api.Proxy;
+using AdoMcpBridge.Api.Telemetry;
 using AdoMcpBridge.Core.Abstractions;
 using AdoMcpBridge.Core.OAuth;
 using AdoMcpBridge.Core.Time;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddBridgeTelemetry(builder.Configuration);
 builder.Services.AddOptions<AdoMcpOptions>().Bind(builder.Configuration.GetSection("AdoMcp"));
 builder.Services.AddSingleton<WrapperTokenMinter>();
 builder.Services.AddSingleton<PkceValidator>();
