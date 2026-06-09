@@ -100,6 +100,18 @@ module containerapp 'modules/containerapp.bicep' = {
   }
 }
 
+module alerts 'modules/alerts.bicep' = {
+  name: 'alerts'
+  params: {
+    location: location
+    actionGroupId: observability.outputs.actionGroupId
+    appInsightsId: observability.outputs.appInsightsId
+    logAnalyticsWorkspaceId: observability.outputs.workspaceId
+    keyVaultId: keyvault.outputs.id
+    environmentName: env
+  }
+}
+
 output containerAppFqdn string = containerapp.outputs.fqdn
 output containerAppName string = containerapp.outputs.appName
 output keyVaultUri string = keyvault.outputs.vaultUri
