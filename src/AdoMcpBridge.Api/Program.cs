@@ -18,6 +18,8 @@ app.MapGet("/healthz", () => Results.Ok("ok"));
 app.MapMetadata();
 app.MapRegister();
 app.MapConsentSubmit();
+app.MapEntraCallback();
+app.MapToken();
 app.MapRazorPages();
 await app.RunAsync();
 
