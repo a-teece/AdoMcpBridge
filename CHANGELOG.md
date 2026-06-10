@@ -6,6 +6,13 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.2](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.1...v0.1.2) (2026-06-10)
+
+
+### Bug Fixes
+
+* accept http loopback redirect URIs in DCR per RFC 8252 ([#30](https://github.com/a-teece/AdoMcpBridge/issues/30)) ([22a9e9e](https://github.com/a-teece/AdoMcpBridge/commit/22a9e9e975e9614cf2a52bdd2b2ff39410843924))
+
 ## [0.1.1](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.0...v0.1.1) (2026-06-10)
 
 
