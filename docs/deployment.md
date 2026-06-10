@@ -225,6 +225,14 @@ param issuerOverride = 'https://<fqdn-from-step-5>'
 Then re-run the same `deploy.ps1` command from step 5. Keep this local
 edit — you'll reuse the file for every upgrade.
 
+The file is tracked by git (not gitignored), but an uncommitted edit
+never leaves your machine — nothing pushes unless you `git add` and
+commit it. If you also develop in this clone and worry about sweeping
+it into a commit with `git add -A`, hide it from `git status` with
+`git update-index --skip-worktree infra/main.prod.bicepparam`. Nothing
+in the file is sensitive either way: the tenant/client ids come from
+environment variables and the issuer is your bridge's public URL.
+
 ## 7. Create the certificate and wire up the Entra app
 
 The Bicep grants the managed identity access to a certificate named
