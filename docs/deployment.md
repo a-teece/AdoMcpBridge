@@ -83,10 +83,14 @@ $SCOPE_ID = az ad sp show --id $ADO_RESOURCE `
 az ad app permission add --id $APP_ID `
   --api $ADO_RESOURCE --api-permissions "$SCOPE_ID=Scope"
 az ad app permission admin-consent --id $APP_ID
+
+# Print the two values you need later
+"APP_ID    = $APP_ID"
+"TENANT_ID = $(az account show --query tenantId -o tsv)"
 ```
 
-Record the **app (client) id** (`$APP_ID`) and your **tenant id**
-(`az account show --query tenantId -o tsv`) — you need both in step 4.
+Note the two values printed at the end — they go into the environment
+variables in step 4.
 
 `offline_access` is requested at runtime as an OAuth scope; it needs no
 API-permission entry. The redirect URI is added in step 7, once the
