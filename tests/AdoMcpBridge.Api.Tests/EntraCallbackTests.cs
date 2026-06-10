@@ -30,8 +30,10 @@ public sealed class EntraCallbackTests : IClassFixture<BridgeApiFactory>
                 "ado-at", "entra-rt", DateTimeOffset.UtcNow.AddHours(1),
                 "user-oid", "alice@example")));
 
+        // Entra only ever sends code + state to the redirect URI; the
+        // session must be correlated via state, never extra parameters.
         var http = _f.CreateClient(new() { AllowAutoRedirect = false });
-        var url = "/authorize/callback?code=entra-code&state=entra-state-EEE&session_id=s1";
+        var url = "/authorize/callback?code=entra-code&state=entra-state-EEE";
         var resp = await http.GetAsync(url);
 
         resp.StatusCode.Should().Be(HttpStatusCode.Redirect);
@@ -40,7 +42,7 @@ public sealed class EntraCallbackTests : IClassFixture<BridgeApiFactory>
     }
 
     [Fact]
-    public async Task Callback_with_state_mismatch_returns_400()
+    public async Task Callback_with_unknown_state_returns_400()
     {
         var cache = _f.Services.GetRequiredService<IAuthorizationSessionCache>();
         await cache.PutAsync(new AuthorizationSession(
@@ -48,7 +50,21 @@ public sealed class EntraCallbackTests : IClassFixture<BridgeApiFactory>
             DateTimeOffset.UtcNow.AddMinutes(5)), default);
 
         var http = _f.CreateClient(new() { AllowAutoRedirect = false });
-        var resp = await http.GetAsync("/authorize/callback?code=c&state=WRONG&session_id=s2");
+        var resp = await http.GetAsync("/authorize/callback?code=c&state=WRONG");
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await resp.Content.ReadAsStringAsync()).Should().Contain("invalid_request");
+    }
+
+    [Fact]
+    public async Task Callback_with_expired_session_returns_400()
+    {
+        var cache = _f.Services.GetRequiredService<IAuthorizationSessionCache>();
+        await cache.PutAsync(new AuthorizationSession(
+            "s3", "cid", "https://cb/x", "ch", "S256", "cs", "ev", "expired-state",
+            _f.Clock.UtcNow.AddMinutes(-1)), default);
+
+        var http = _f.CreateClient(new() { AllowAutoRedirect = false });
+        var resp = await http.GetAsync("/authorize/callback?code=c&state=expired-state");
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         (await resp.Content.ReadAsStringAsync()).Should().Contain("invalid_request");
     }

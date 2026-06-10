@@ -26,6 +26,16 @@ public sealed class InMemoryAuthorizationSessionCache : IAuthorizationSessionCac
         return new(s);
     }
 
+    public ValueTask<AuthorizationSession?> GetByEntraStateAsync(string entraState, CancellationToken ct)
+    {
+        foreach (var s in _sessions.Values)
+        {
+            if (string.Equals(s.EntraState, entraState, StringComparison.Ordinal))
+                return GetAsync(s.SessionId, ct);
+        }
+        return new(default(AuthorizationSession?));
+    }
+
     public ValueTask RemoveAsync(string sessionId, CancellationToken ct)
     {
         _sessions.TryRemove(sessionId, out _);

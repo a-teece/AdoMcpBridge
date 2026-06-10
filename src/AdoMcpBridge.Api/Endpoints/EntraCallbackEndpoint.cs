@@ -10,10 +10,11 @@ public static class EntraCallbackEndpoint
 {
     public static IEndpointRouteBuilder MapEntraCallback(this IEndpointRouteBuilder app)
     {
+        // Entra appends only code + state to the redirect URI; the
+        // session is correlated via the bridge-minted opaque state.
         app.MapGet("/authorize/callback", async (
             [FromQuery(Name = "code")] string code,
             [FromQuery(Name = "state")] string state,
-            [FromQuery(Name = "session_id")] string sessionId,
             IAuthorizationSessionCache cache,
             IEntraTokenClient entra,
             ITokenStore store,
@@ -23,17 +24,11 @@ public static class EntraCallbackEndpoint
             IOptions<AdoMcpOptions> opts,
             CancellationToken ct) =>
         {
-            var s = await cache.GetAsync(sessionId, ct);
+            var s = await cache.GetByEntraStateAsync(state, ct);
             if (s is null)
             {
                 return Results.BadRequest(System.Text.Json.JsonDocument.Parse(
-                    OAuthError.InvalidRequest("session expired").ToJson()).RootElement);
-            }
-
-            if (!string.Equals(state, s.EntraState, StringComparison.Ordinal))
-            {
-                return Results.BadRequest(System.Text.Json.JsonDocument.Parse(
-                    OAuthError.InvalidRequest("state mismatch").ToJson()).RootElement);
+                    OAuthError.InvalidRequest("session expired or state unknown").ToJson()).RootElement);
             }
 
             var bridgeCallback = $"{opts.Value.Issuer.TrimEnd('/')}/authorize/callback";
@@ -55,7 +50,7 @@ public static class EntraCallbackEndpoint
                 UserPrincipalName: result.UserPrincipalName,
                 ExpiresAt: clock.UtcNow.AddSeconds(60)), ct);
 
-            await cache.RemoveAsync(sessionId, ct);
+            await cache.RemoveAsync(s.SessionId, ct);
 
             var redirect = $"{s.RedirectUri}?code={Uri.EscapeDataString(authCode)}" +
                            $"&state={Uri.EscapeDataString(s.ClientState)}";
