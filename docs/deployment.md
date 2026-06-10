@@ -205,15 +205,25 @@ $FQDN = az containerapp show -n ca-adomcp-prod -g rg-adomcp-prod `
 ## 6. Pin the issuer (second deployment pass)
 
 The bridge advertises its own URL as the OAuth issuer, which isn't
-known until the Container App exists. Edit your `.bicepparam` file:
+known until the Container App exists.
+
+Open `infra\main.prod.bicepparam` (or `main.dev.bicepparam` for dev) in
+your repo clone with any text editor — e.g.
+`notepad infra\main.prod.bicepparam` — and change the existing
+`issuerOverride` line from:
+
+```bicep
+param issuerOverride = ''
+```
+
+to your step-5 hostname (or your custom domain, if you bind one):
 
 ```bicep
 param issuerOverride = 'https://<fqdn-from-step-5>'
 ```
 
-(or your custom domain, if you bind one) and re-run the same
-`deploy.ps1` command from step 5. Keep this local edit — you'll reuse
-the file for every upgrade.
+Then re-run the same `deploy.ps1` command from step 5. Keep this local
+edit — you'll reuse the file for every upgrade.
 
 ## 7. Create the certificate and wire up the Entra app
 
