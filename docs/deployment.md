@@ -56,25 +56,31 @@ Container App scales to zero).
 
 The bridge is **single-tenant**: it serves users of one Entra tenant.
 
+> **Shell note.** All CLI snippets below are **PowerShell 7** (which
+> `deploy.ps1` requires anyway) and work identically on Windows, macOS,
+> and Linux. If you prefer bash, the `az` commands are the same — only
+> variable assignment (`VAR=$(az ...)` vs `$VAR = az ...`) and line
+> continuation (`\` vs `` ` ``) differ.
+
 ## 1. Create the Entra app registration
 
 The bridge authenticates to Entra as one shared, admin-consented
 confidential client using **certificate auth** (no client secrets).
 
-```bash
+```powershell
 # Create the app (single tenant)
-APP_ID=$(az ad app create \
-  --display-name "ADO MCP Bridge" \
-  --sign-in-audience AzureADMyOrg \
-  --query appId -o tsv)
+$APP_ID = az ad app create `
+  --display-name "ADO MCP Bridge" `
+  --sign-in-audience AzureADMyOrg `
+  --query appId -o tsv
 
 # Look up the user_impersonation scope id on the Azure DevOps resource
-ADO_RESOURCE=499b84ac-1321-427f-aa17-267ca6975798
-SCOPE_ID=$(az ad sp show --id $ADO_RESOURCE \
-  --query "oauth2PermissionScopes[?value=='user_impersonation'].id | [0]" -o tsv)
+$ADO_RESOURCE = '499b84ac-1321-427f-aa17-267ca6975798'
+$SCOPE_ID = az ad sp show --id $ADO_RESOURCE `
+  --query "oauth2PermissionScopes[?value=='user_impersonation'].id | [0]" -o tsv
 
 # Request the delegated permission and grant tenant-wide admin consent
-az ad app permission add --id $APP_ID \
+az ad app permission add --id $APP_ID `
   --api $ADO_RESOURCE --api-permissions "$SCOPE_ID=Scope"
 az ad app permission admin-consent --id $APP_ID
 ```
@@ -92,19 +98,19 @@ The SQL server is Entra-only (no SQL logins); its administrator is an
 Entra security group. Create it and add yourself so you can run the
 one-time schema step later:
 
-```bash
-SQL_ADMIN_OID=$(az ad group create \
-  --display-name sg-adomcp-sqladmins-prod \
-  --mail-nickname sg-adomcp-sqladmins-prod \
-  --query id -o tsv)
+```powershell
+$SQL_ADMIN_OID = az ad group create `
+  --display-name sg-adomcp-sqladmins-prod `
+  --mail-nickname sg-adomcp-sqladmins-prod `
+  --query id -o tsv
 
-az ad group member add --group $SQL_ADMIN_OID \
-  --member-id $(az ad signed-in-user show --query id -o tsv)
+az ad group member add --group $SQL_ADMIN_OID `
+  --member-id (az ad signed-in-user show --query id -o tsv)
 ```
 
 ## 3. Create the resource group
 
-```bash
+```powershell
 az group create --name rg-adomcp-prod --location uksouth
 ```
 
@@ -114,7 +120,7 @@ deploy elsewhere.
 
 ## 4. Check out a release and set parameters
 
-```bash
+```powershell
 git clone https://github.com/a-teece/AdoMcpBridge.git && cd AdoMcpBridge
 git fetch --tags && git checkout vX.Y.Z   # pick the latest release tag
 ```
@@ -130,9 +136,8 @@ $env:ADOMCP_CLIENT_ID          = "<app-id-from-step-1>"
 $env:ADOMCP_SQL_ADMIN_GROUP_OID = "<group-object-id-from-step-2>"
 ```
 
-(Bash: `export ADOMCP_TENANT_ID=...` etc. `ADOMCP_IMAGE` exists in the
-param files but is overridden by `deploy.ps1`, which constructs the
-image reference from `-Tag`.)
+(`ADOMCP_IMAGE` exists in the param files but is overridden by
+`deploy.ps1`, which constructs the image reference from `-Tag`.)
 
 If you leave these unset the deployment proceeds with all-zero GUIDs
 and the app cannot authenticate — double-check before deploying.
@@ -159,10 +164,10 @@ release workflow identity.
 
 When it finishes, capture the bridge's hostname:
 
-```bash
-FQDN=$(az containerapp show -n ca-adomcp-prod -g rg-adomcp-prod \
-  --query properties.configuration.ingress.fqdn -o tsv)
-echo "https://$FQDN"
+```powershell
+$FQDN = az containerapp show -n ca-adomcp-prod -g rg-adomcp-prod `
+  --query properties.configuration.ingress.fqdn -o tsv
+"https://$FQDN"
 ```
 
 > The app is **not functional yet** — the OAuth issuer is a
@@ -190,18 +195,22 @@ The Bicep grants the managed identity access to a certificate named
 **Key Vault Certificates Officer** role on the vault to do this
 (`az role assignment create --role "Key Vault Certificates Officer" ...`).
 
-```bash
+```powershell
 # Create a self-signed cert with the default policy
-az keyvault certificate create --vault-name kv-adomcp-prod \
-  --name ado-mcp-bridge \
-  --policy "$(az keyvault certificate get-default-policy)"
+# (written to a file — passing inline JSON to az from PowerShell is fragile)
+az keyvault certificate get-default-policy | Out-File policy.json
+az keyvault certificate create --vault-name kv-adomcp-prod `
+  --name ado-mcp-bridge --policy '@policy.json'
 
 # Download the public portion and attach it to the app registration
-az keyvault certificate download --vault-name kv-adomcp-prod \
+az keyvault certificate download --vault-name kv-adomcp-prod `
   --name ado-mcp-bridge --file ado-mcp-bridge.pem
-az ad app credential reset --id $APP_ID --cert @ado-mcp-bridge.pem --append
-rm ado-mcp-bridge.pem
+az ad app credential reset --id $APP_ID --cert '@ado-mcp-bridge.pem' --append
+Remove-Item ado-mcp-bridge.pem, policy.json
 ```
+
+(The `@file` arguments are quoted so PowerShell doesn't parse `@` as its
+splatting operator.)
 
 A self-signed certificate is fine here — it authenticates your app to
 Entra; no third party needs to trust it. The default policy auto-renews
@@ -212,9 +221,9 @@ rotation you must re-upload the new public key to the app registration**
 
 Now add the redirect URI (the bridge's Entra callback):
 
-```bash
-az ad app update --id $APP_ID \
-  --web-redirect-uris "https://<fqdn-from-step-5>/authorize/callback"
+```powershell
+az ad app update --id $APP_ID `
+  --web-redirect-uris "https://$FQDN/authorize/callback"
 ```
 
 ## 8. Create the database user and apply the schema
@@ -226,9 +235,9 @@ changelog says it ships new migrations).
 The server firewall only allows Azure services, so temporarily allow
 your own IP:
 
-```bash
-MYIP=$(curl -s https://api.ipify.org)
-az sql server firewall-rule create -g rg-adomcp-prod -s sql-adomcp-prod \
+```powershell
+$MYIP = Invoke-RestMethod https://api.ipify.org
+az sql server firewall-rule create -g rg-adomcp-prod -s sql-adomcp-prod `
   -n temp-deploy --start-ip-address $MYIP --end-ip-address $MYIP
 ```
 
@@ -245,26 +254,26 @@ ALTER ROLE db_datawriter ADD MEMBER [id-adomcp-prod];
 Apply the schema from your release checkout (uses your Entra login via
 `Active Directory Default`):
 
-```bash
-dotnet ef database update \
-  --project src/AdoMcpBridge.Core --startup-project src/AdoMcpBridge.Api \
+```powershell
+dotnet ef database update `
+  --project src/AdoMcpBridge.Core --startup-project src/AdoMcpBridge.Api `
   --connection "Server=tcp:sql-adomcp-prod.database.windows.net,1433;Database=sqldb-adomcp;Authentication=Active Directory Default;Encrypt=True;"
 ```
 
 Then remove the firewall rule and restart the app so it starts clean:
 
-```bash
+```powershell
 az sql server firewall-rule delete -g rg-adomcp-prod -s sql-adomcp-prod -n temp-deploy
-az containerapp revision restart -n ca-adomcp-prod -g rg-adomcp-prod \
-  --revision $(az containerapp revision list -n ca-adomcp-prod -g rg-adomcp-prod --query "[0].name" -o tsv)
+az containerapp revision restart -n ca-adomcp-prod -g rg-adomcp-prod `
+  --revision (az containerapp revision list -n ca-adomcp-prod -g rg-adomcp-prod --query "[0].name" -o tsv)
 ```
 
 ## 9. Verify
 
-```bash
-curl https://$FQDN/healthz                                    # → ok
-curl https://$FQDN/.well-known/oauth-authorization-server     # → AS metadata JSON with your issuer
-curl https://$FQDN/connector-info.json                        # → connector card
+```powershell
+Invoke-RestMethod "https://$FQDN/healthz"                                  # → ok
+Invoke-RestMethod "https://$FQDN/.well-known/oauth-authorization-server"   # → AS metadata with your issuer
+Invoke-RestMethod "https://$FQDN/connector-info.json"                      # → connector card
 ```
 
 All three returning 200 with your FQDN as the issuer means the bridge
@@ -275,7 +284,7 @@ is up. For a full end-to-end check (discovery → DCR → token →
 
 **Claude Code** — add the bridge as an HTTP MCP server:
 
-```bash
+```powershell
 claude mcp add --transport http ado https://<fqdn>/mcp
 ```
 
@@ -305,7 +314,7 @@ applied as Container App ingress IP restrictions.
 
 ## 12. Upgrading to a new release
 
-```bash
+```powershell
 git fetch --tags && git checkout vX.Y.Z
 ./deploy.ps1 -Env prod -Tag vX.Y.Z -SubscriptionId <sub> -ResourceGroup rg-adomcp-prod
 ```
