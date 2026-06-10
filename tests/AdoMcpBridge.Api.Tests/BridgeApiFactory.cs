@@ -19,6 +19,10 @@ public class BridgeApiFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        // UseSetting (not ConfigureAppConfiguration) because Program.cs
+        // reads this eagerly at registration time; test config sources
+        // are appended too late for eager reads under minimal hosting.
+        builder.UseSetting("AdoMcp:Database:ConnectionString", "Server=localhost;Database=test;");
         builder.ConfigureAppConfiguration((_, cfg) =>
         {
             cfg.AddInMemoryCollection(new Dictionary<string, string?>
