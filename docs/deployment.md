@@ -110,7 +110,13 @@ $SQL_ADMIN_OID = az ad group create `
 
 az ad group member add --group $SQL_ADMIN_OID `
   --member-id (az ad signed-in-user show --query id -o tsv)
+
+# Print the value you need in step 4
+"SQL_ADMIN_OID = $SQL_ADMIN_OID"
 ```
+
+Note the printed object id — it goes into the environment variables in
+step 4.
 
 ## 3. Create the resource group
 
