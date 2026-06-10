@@ -39,7 +39,15 @@ Container App scales to zero).
 
 - [PowerShell 7+](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell)
 - [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) (includes Bicep)
-- [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) — `deploy.ps1` refuses to deploy an image whose signature does not verify
+- [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) — `deploy.ps1` refuses to deploy an image whose signature does not verify.
+  On Windows, `winget install Sigstore.Cosign` installs the binary as
+  `cosign-windows-amd64.exe` without creating a `cosign` alias; make a
+  copy named `cosign.exe` next to it (the folder is already on `PATH`):
+
+  ```powershell
+  $pkg = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Sigstore.Cosign_Microsoft.Winget.Source_8wekyb3d8bbwe"
+  Copy-Item "$pkg\cosign-windows-amd64.exe" "$pkg\cosign.exe"
+  ```
 - `git`
 - For the one-time schema step: [.NET 10 SDK](https://dotnet.microsoft.com/download) and `dotnet tool install -g dotnet-ef`
 
