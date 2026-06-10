@@ -121,6 +121,16 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
             { name: 'AdoMcp__Entra__ClientId', value: entraClientId }
             { name: 'AdoMcp__Entra__CertificateName', value: certificateName }
             { name: 'AdoMcp__Entra__Authority', value: '${environment().authentication.loginEndpoint}${entraTenantId}/v2.0' }
+            // EntraOptions validates its own KeyVaultUri (used by the
+            // CertificateClient) separately from AdoMcp__KeyVault__VaultUri.
+            { name: 'AdoMcp__Entra__KeyVaultUri', value: keyVaultUri }
+            // openid + profile: the bridge parses oid / preferred_username
+            // from the id_token. offline_access: refresh token. The GUID
+            // resource is Azure DevOps (user_impersonation).
+            { name: 'AdoMcp__Entra__Scopes__0', value: 'openid' }
+            { name: 'AdoMcp__Entra__Scopes__1', value: 'profile' }
+            { name: 'AdoMcp__Entra__Scopes__2', value: 'offline_access' }
+            { name: 'AdoMcp__Entra__Scopes__3', value: '499b84ac-1321-427f-aa17-267ca6975798/user_impersonation' }
             { name: 'AdoMcp__KeyVault__VaultUri', value: keyVaultUri }
             { name: 'AdoMcp__KeyVault__DekName', value: dekName }
             { name: 'AdoMcp__Database__ConnectionString', value: 'Server=tcp:${sqlServerFqdn},1433;Database=${sqlDatabaseName};Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;' }
