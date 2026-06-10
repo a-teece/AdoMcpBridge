@@ -52,6 +52,9 @@ resource tokenRejectionAlert 'Microsoft.Insights/metricAlerts@2018-03-01' = {
           threshold: 10
           timeAggregation: 'Total'
           criterionType: 'StaticThresholdCriterion'
+          // Custom metric does not exist until the app first emits it;
+          // without this, alert creation fails on a fresh environment.
+          skipMetricValidation: true
         }
       ]
     }
@@ -79,6 +82,7 @@ resource upstreamErrorAlert 'Microsoft.Insights/metricAlerts@2018-03-01' = {
           threshold: 5
           timeAggregation: 'Total'
           criterionType: 'StaticThresholdCriterion'
+          skipMetricValidation: true
         }
       ]
     }
@@ -106,6 +110,7 @@ resource entraRefreshLatencyAlert 'Microsoft.Insights/metricAlerts@2018-03-01' =
           threshold: 2000
           timeAggregation: 'Average'
           criterionType: 'StaticThresholdCriterion'
+          skipMetricValidation: true
         }
       ]
     }
@@ -113,29 +118,38 @@ resource entraRefreshLatencyAlert 'Microsoft.Insights/metricAlerts@2018-03-01' =
   }
 }
 
-resource certExpiryAlert 'Microsoft.Insights/metricAlerts@2018-03-01' = {
-  name: '${prefix}-cert-expiry'
-  location: 'global'
+// CertificateNearExpiry is an Event Grid event type, not a Key Vault
+// platform metric, so it cannot be a metric alert. Key Vault emits the
+// event ~30 days before expiry; the MonitorAlert destination (supported
+// for Key Vault system events) turns it into an Azure Monitor alert
+// wired to the action group.
+resource keyVaultEventsTopic 'Microsoft.EventGrid/systemTopics@2025-02-15' = {
+  name: '${prefix}-kv-events'
+  location: location
   properties: {
-    severity: 2
-    enabled: true
-    scopes: [ keyVaultId ]
-    evaluationFrequency: 'PT1H'
-    windowSize: 'PT1H'
-    criteria: {
-      'odata.type': 'Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria'
-      allOf: [
-        {
-          name: 'CertNearExpiry'
-          metricNamespace: 'Microsoft.KeyVault/vaults'
-          metricName: 'CertificateNearExpiry'
-          operator: 'LessThan'
-          threshold: 14
-          timeAggregation: 'Minimum'
-          criterionType: 'StaticThresholdCriterion'
-        }
+    source: keyVaultId
+    topicType: 'Microsoft.KeyVault.vaults'
+  }
+}
+
+resource certExpiryAlert 'Microsoft.EventGrid/systemTopics/eventSubscriptions@2025-02-15' = {
+  parent: keyVaultEventsTopic
+  name: '${prefix}-cert-expiry'
+  properties: {
+    // MonitorAlert only supports the CloudEvents v1.0 schema.
+    eventDeliverySchema: 'CloudEventSchemaV1_0'
+    filter: {
+      includedEventTypes: [
+        'Microsoft.KeyVault.CertificateNearExpiry'
       ]
     }
-    actions: [ { actionGroupId: actionGroupId } ]
+    destination: {
+      endpointType: 'MonitorAlert'
+      properties: {
+        severity: 'Sev2'
+        actionGroups: [ actionGroupId ]
+        description: 'Key Vault certificate near expiry — see runbook scenario 5.'
+      }
+    }
   }
 }

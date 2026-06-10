@@ -193,21 +193,19 @@ AppMetrics
 
 ### Scenario 5 — Certificate near expiry
 
-**Alert:** `adomcp-{env}-cert-expiry` — Key Vault certificate < 14 days
-to expiry.
+**Alert:** `adomcp-{env}-cert-expiry` — Key Vault emits the Event Grid
+`Microsoft.KeyVault.CertificateNearExpiry` event ~30 days before a
+certificate expires; the event subscription's MonitorAlert destination
+raises a Sev2 Azure Monitor alert on the action group.
 
 **Symptom:** Pre-failure warning. If ignored, Entra auth will hard-fail
 when the cert expires.
 
-**Saved Kusto query:**
+**Check remaining validity directly:**
 
-```kusto
-AzureMetrics
-| where TimeGenerated > ago(1d)
-| where ResourceProvider == "MICROSOFT.KEYVAULT"
-| where MetricName == "CertificateNearExpiry"
-| summarize days_left = min(Minimum) by Resource, bin(TimeGenerated, 1h)
-| order by days_left asc
+```bash
+az keyvault certificate show --vault-name kv-adomcp-{env} \
+  --name ado-mcp-bridge --query "attributes.expires" -o tsv
 ```
 
 **Triage steps:**
@@ -224,10 +222,10 @@ AzureMetrics
 - Run `gh workflow run key-vault-rotation.yml -f env={env}` which
   issues a new cert, uploads it to Key Vault under the same name, and
   triggers a Container App revision restart to pick it up.
-- After rotation, re-run the Kusto query above and confirm
-  `days_left` > 60.
+- After rotation, re-run the expiry check above and confirm the new
+  expiry date is > 60 days out.
 
-**Escalation:** Page on-call when `days_left` < 3.
+**Escalation:** Page on-call when fewer than 3 days remain.
 
 ---
 
