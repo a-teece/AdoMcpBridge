@@ -40,10 +40,13 @@ public class BridgeApiFactory : WebApplicationFactory<Program>
             s.RemoveAll<IKeyVaultEncryptor>();
             s.RemoveAll<IClock>();
             s.RemoveAll<ITokenStore>();
+            s.RemoveAll<AdoMcpBridge.Core.OAuth.IAuthorizationSessionCache>();
             s.AddSingleton(EntraClient);
             s.AddSingleton(Encryptor);
             s.AddSingleton<IClock>(Clock);
             s.AddSingleton<ITokenStore>(Store);
+            s.AddSingleton<AdoMcpBridge.Core.OAuth.IAuthorizationSessionCache>(
+                new AdoMcpBridge.Core.OAuth.InMemoryAuthorizationSessionCache(Clock));
 
             Encryptor.EncryptAsync(Arg.Any<byte[]>(), Arg.Any<CancellationToken>())
                 .Returns(ci => new ValueTask<byte[]>(ci.Arg<byte[]>()));

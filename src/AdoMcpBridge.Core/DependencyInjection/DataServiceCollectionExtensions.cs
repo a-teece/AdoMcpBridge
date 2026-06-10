@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using AdoMcpBridge.Core.Abstractions;
 using AdoMcpBridge.Core.Data;
 using AdoMcpBridge.Core.KeyVault;
+using AdoMcpBridge.Core.OAuth;
 using Azure.Identity;
 using Azure.Security.KeyVault.Keys;
 using Azure.Security.KeyVault.Keys.Cryptography;
@@ -25,6 +26,9 @@ public static class DataServiceCollectionExtensions
         services.AddDbContext<BridgeDbContext>(o => o.UseSqlServer(connectionString));
 
         services.AddScoped<ITokenStore, EfTokenStore>();
+        // SQL-backed so in-flight authorizations survive scale-to-zero,
+        // replica hops, and restarts (issue #33).
+        services.AddScoped<IAuthorizationSessionCache, EfAuthorizationSessionCache>();
 
         services.Configure<KeyVaultOptions>(configuration.GetSection(KeyVaultOptions.SectionName));
 

@@ -10,6 +10,7 @@ public sealed class BridgeDbContext : DbContext
     internal DbSet<ClientEntity> Clients => Set<ClientEntity>();
     internal DbSet<AuthorizationCodeEntity> AuthorizationCodes => Set<AuthorizationCodeEntity>();
     internal DbSet<TokenEntity> Tokens => Set<TokenEntity>();
+    internal DbSet<AuthorizationSessionEntity> Sessions => Set<AuthorizationSessionEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -36,6 +37,25 @@ public sealed class BridgeDbContext : DbContext
             e.Property(x => x.UserObjectId).HasMaxLength(64).IsRequired();
             e.Property(x => x.UserPrincipalName).HasMaxLength(256).IsRequired();
             e.Property(x => x.ExpiresAt).IsRequired();
+            e.HasIndex(x => x.ExpiresAt);
+        });
+
+        modelBuilder.Entity<AuthorizationSessionEntity>(e =>
+        {
+            e.ToTable("Sessions");
+            e.HasKey(x => x.SessionId);
+            e.Property(x => x.SessionId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.ClientId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.RedirectUri).HasMaxLength(2048).IsRequired();
+            e.Property(x => x.ClientCodeChallenge).HasMaxLength(128).IsRequired();
+            e.Property(x => x.ClientCodeChallengeMethod).HasMaxLength(16).IsRequired();
+            e.Property(x => x.ClientState).HasMaxLength(512).IsRequired();
+            e.Property(x => x.EntraCodeVerifier).HasMaxLength(128).IsRequired();
+            e.Property(x => x.EntraState).HasMaxLength(64).IsRequired();
+            e.Property(x => x.ExpiresAt).IsRequired();
+            // The Entra callback correlates by state; sessions are
+            // short-lived so the unique index doubles as the lookup path.
+            e.HasIndex(x => x.EntraState).IsUnique();
             e.HasIndex(x => x.ExpiresAt);
         });
 
