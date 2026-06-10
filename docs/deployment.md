@@ -297,24 +297,43 @@ az sql server firewall-rule create -g rg-adomcp-prod -s sql-adomcp-prod `
   -n temp-deploy --start-ip-address $MYIP --end-ip-address $MYIP
 ```
 
-Connect as a member of the SQL admin group (e.g.
-`sqlcmd -S sql-adomcp-prod.database.windows.net -d sqldb-adomcp -G`) and
-grant the managed identity access:
+Grant the managed identity access using an Entra access token from your
+`az` login (your SQL admin group membership from step 2 authorizes
+this). Avoid `sqlcmd -G` — the classic ODBC build attempts Integrated
+auth and fails with `0xCAA9001F ... Integrated Windows authentication
+supported only in federation flow` on non-federated accounts:
 
-```sql
+```powershell
+Install-Module SqlServer -Scope CurrentUser   # once, if not present
+
+$token = az account get-access-token --resource https://database.windows.net/ `
+  --query accessToken -o tsv
+Invoke-Sqlcmd -ServerInstance sql-adomcp-prod.database.windows.net `
+  -Database sqldb-adomcp -AccessToken $token -Query @"
 CREATE USER [id-adomcp-prod] FROM EXTERNAL PROVIDER;
 ALTER ROLE db_datareader ADD MEMBER [id-adomcp-prod];
 ALTER ROLE db_datawriter ADD MEMBER [id-adomcp-prod];
+"@
 ```
 
-Apply the schema from your release checkout (uses your Entra login via
-`Active Directory Default`):
+Apply the schema from your release checkout. EF's design-time factory
+uses a placeholder connection, so generate the idempotent script and
+run it over the same token-authenticated connection:
 
 ```powershell
-dotnet ef database update `
-  --project src/AdoMcpBridge.Core --startup-project src/AdoMcpBridge.Api `
-  --connection "Server=tcp:sql-adomcp-prod.database.windows.net,1433;Database=sqldb-adomcp;Authentication=Active Directory Default;Encrypt=True;"
+dotnet restore
+dotnet ef migrations script --idempotent `
+  --project src/AdoMcpBridge.Core --startup-project src/AdoMcpBridge.Core `
+  --output migrate.sql
+
+Invoke-Sqlcmd -ServerInstance sql-adomcp-prod.database.windows.net `
+  -Database sqldb-adomcp -AccessToken $token -InputFile migrate.sql
+Remove-Item migrate.sql
 ```
+
+(If `dotnet ef` is missing: `dotnet tool install -g dotnet-ef`. Tokens
+expire after ~1 hour — re-run the `get-access-token` line if
+`Invoke-Sqlcmd` reports an authentication failure.)
 
 Then remove the firewall rule and restart the app so it starts clean:
 
@@ -380,7 +399,7 @@ git checkout $TAG
 Before upgrading, check [`CHANGELOG.md`](../CHANGELOG.md) and
 [`compatibility.md`](../compatibility.md) (bridge version ↔ MS Remote
 MCP API generation). If the release notes mention new database
-migrations, repeat the `dotnet ef database update` part of step 8.
+migrations, repeat the migration-script part of step 8.
 Your local `.bicepparam` edits (issuer, IP allowlist, region) are
 uncommitted working-tree changes — `git checkout <tag>` preserves them
 unless the file changed upstream, in which case re-apply them.
