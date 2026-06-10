@@ -17,4 +17,15 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # A PAT (not GITHUB_TOKEN) so the tags and PRs release-please
+          # creates trigger workflows: GITHUB_TOKEN-created refs/events
+          # never do (GitHub anti-recursion). Without it, every release
+          # needs two manual workarounds — close/reopen the release PR
+          # to get CI, and delete/re-push the tag to get a signed image
+          # whose cosign identity (refs/tags/...) deploy.ps1 accepts.
+          # See issue #24. Falls back to GITHUB_TOKEN (with those
+          # manual steps) when the secret is absent, e.g. in forks.
+          #
+          # RELEASE_PLEASE_TOKEN: fine-grained PAT scoped to this repo,
+          # permissions Contents read/write + Pull requests read/write.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
