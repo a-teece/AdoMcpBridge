@@ -119,9 +119,14 @@ AdoMcpBridge/
   tokens still carry real user identity into ADO.
 - **Confidential client** + **certificate auth** (not client secret).
   Cert lives in Key Vault with auto-rotation.
-- Delegated scopes:
-  `499b84ac-1321-427f-aa17-267ca6975798/user_impersonation` +
-  `offline_access`.
+- Delegated scopes: `https://mcp.dev.azure.com/Ado.Mcp.Tools`
+  (resource app `2a72489c-aab2-4b65-b93a-a91edccf33b8`) + `openid` +
+  `profile` + `offline_access`.
+  *Corrected 2026-06-10:* the spec originally assumed the classic ADO
+  scope (`499b84ac-1321-427f-aa17-267ca6975798/user_impersonation`),
+  but the Remote MCP server is its own Entra resource and rejects
+  ADO-audience tokens; `openid`/`profile` are required because the
+  bridge reads `oid`/`preferred_username` from the id_token.
 - **Single tenant.**
 
 ### End-to-end flow
