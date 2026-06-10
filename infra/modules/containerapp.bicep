@@ -125,12 +125,15 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
             // CertificateClient) separately from AdoMcp__KeyVault__VaultUri.
             { name: 'AdoMcp__Entra__KeyVaultUri', value: keyVaultUri }
             // openid + profile: the bridge parses oid / preferred_username
-            // from the id_token. offline_access: refresh token. The GUID
-            // resource is Azure DevOps (user_impersonation).
+            // from the id_token. offline_access: refresh token. The MCP
+            // server is its own Entra resource (app
+            // 2a72489c-aab2-4b65-b93a-a91edccf33b8, scope Ado.Mcp.Tools)
+            // and 401s classic ADO-audience tokens
+            // (499b84ac.../user_impersonation).
             { name: 'AdoMcp__Entra__Scopes__0', value: 'openid' }
             { name: 'AdoMcp__Entra__Scopes__1', value: 'profile' }
             { name: 'AdoMcp__Entra__Scopes__2', value: 'offline_access' }
-            { name: 'AdoMcp__Entra__Scopes__3', value: '499b84ac-1321-427f-aa17-267ca6975798/user_impersonation' }
+            { name: 'AdoMcp__Entra__Scopes__3', value: 'https://mcp.dev.azure.com/Ado.Mcp.Tools' }
             { name: 'AdoMcp__KeyVault__VaultUri', value: keyVaultUri }
             { name: 'AdoMcp__KeyVault__DekName', value: dekName }
             { name: 'AdoMcp__Database__ConnectionString', value: 'Server=tcp:${sqlServerFqdn},1433;Database=${sqlDatabaseName};Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;' }
