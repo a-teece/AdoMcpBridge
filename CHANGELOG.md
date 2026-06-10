@@ -6,6 +6,13 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.3](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.2...v0.1.3) (2026-06-10)
+
+
+### Bug Fixes
+
+* correlate the Entra callback by state instead of session_id ([#32](https://github.com/a-teece/AdoMcpBridge/issues/32)) ([c3f1890](https://github.com/a-teece/AdoMcpBridge/commit/c3f18906ce11b77cc36dc273d3ef1b5658a1a44d))
+
 ## [0.1.2](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.1...v0.1.2) (2026-06-10)
 
 
