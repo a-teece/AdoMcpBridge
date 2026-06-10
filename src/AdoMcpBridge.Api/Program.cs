@@ -4,15 +4,21 @@ using AdoMcpBridge.Api.Options;
 using AdoMcpBridge.Api.Proxy;
 using AdoMcpBridge.Api.Telemetry;
 using AdoMcpBridge.Core.Abstractions;
+using AdoMcpBridge.Core.DependencyInjection;
+using AdoMcpBridge.Core.Entra;
 using AdoMcpBridge.Core.OAuth;
 using AdoMcpBridge.Core.Time;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddBridgeTelemetry(builder.Configuration);
 builder.Services.AddOptions<AdoMcpOptions>().Bind(builder.Configuration.GetSection("AdoMcp"));
+builder.Services.AddBridgeDataServices(builder.Configuration);
+builder.Services.AddEntraClient(builder.Configuration);
 builder.Services.AddSingleton<WrapperTokenMinter>();
 builder.Services.AddSingleton<PkceValidator>();
-builder.Services.AddSingleton<AuthorizeRequestValidator>();
+// Scoped, not singleton: it consumes ITokenStore, which is scoped to
+// the request (EF DbContext lifetime).
+builder.Services.AddScoped<AuthorizeRequestValidator>();
 builder.Services.AddSingleton<IAuthorizationSessionCache, InMemoryAuthorizationSessionCache>();
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddRazorPages();
