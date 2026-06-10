@@ -125,9 +125,18 @@ deploy elsewhere.
 ## 4. Check out a release and set parameters
 
 ```powershell
-git clone https://github.com/a-teece/AdoMcpBridge.git && cd AdoMcpBridge
-git fetch --tags && git checkout vX.Y.Z   # pick the latest release tag
+git clone https://github.com/a-teece/AdoMcpBridge.git
+cd AdoMcpBridge
+git fetch --tags
+
+# Check out the latest release tag (or set $TAG = 'vX.Y.Z' to pin one)
+$TAG = git tag --sort=-v:refname | Select-Object -First 1
+git checkout $TAG
+"Deploying release $TAG"
 ```
+
+`$TAG` is reused by the deploy commands in steps 5 and 6, so run those
+from this same shell session.
 
 The per-environment parameter files
 (`infra/main.dev.bicepparam` / `infra/main.prod.bicepparam`) read your
@@ -149,14 +158,14 @@ and the app cannot authenticate — double-check before deploying.
 ## 5. First deployment pass
 
 ```powershell
-./deploy.ps1 -Env prod -Tag vX.Y.Z `
+./deploy.ps1 -Env prod -Tag $TAG `
     -SubscriptionId <subscription-guid> `
     -ResourceGroup rg-adomcp-prod
 ```
 
 The script:
 
-1. Runs `cosign verify` against `ghcr.io/a-teece/adomcpbridge:vX.Y.Z`,
+1. Runs `cosign verify` against `ghcr.io/a-teece/adomcpbridge:<tag>`,
    pinned to this repo's `release.yml` workflow identity. It refuses to
    deploy if verification fails.
 2. Runs `az deployment group create` with `infra/main.bicep` and your
@@ -319,8 +328,10 @@ applied as Container App ingress IP restrictions.
 ## 12. Upgrading to a new release
 
 ```powershell
-git fetch --tags && git checkout vX.Y.Z
-./deploy.ps1 -Env prod -Tag vX.Y.Z -SubscriptionId <sub> -ResourceGroup rg-adomcp-prod
+git fetch --tags
+$TAG = git tag --sort=-v:refname | Select-Object -First 1
+git checkout $TAG
+./deploy.ps1 -Env prod -Tag $TAG -SubscriptionId <sub> -ResourceGroup rg-adomcp-prod
 ```
 
 Before upgrading, check [`CHANGELOG.md`](../CHANGELOG.md) and
