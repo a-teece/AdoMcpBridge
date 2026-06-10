@@ -6,6 +6,13 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.4](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.3...v0.1.4) (2026-06-10)
+
+
+### Bug Fixes
+
+* supply Entra KeyVaultUri and OAuth scopes to the container ([#35](https://github.com/a-teece/AdoMcpBridge/issues/35)) ([e83d6e4](https://github.com/a-teece/AdoMcpBridge/commit/e83d6e451e2ef09ad2900ef492932a56b1533efa))
+
 ## [0.1.3](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.2...v0.1.3) (2026-06-10)
 
 
