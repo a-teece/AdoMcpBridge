@@ -236,9 +236,20 @@ environment variables and the issuer is your bridge's public URL.
 ## 7. Create the certificate and wire up the Entra app
 
 The Bicep grants the managed identity access to a certificate named
-`ado-mcp-bridge` in the Key Vault, but does not create it. You need the
-**Key Vault Certificates Officer** role on the vault to do this
-(`az role assignment create --role "Key Vault Certificates Officer" ...`).
+`ado-mcp-bridge` in the Key Vault, but does not create it. The vault
+uses RBAC, so even as subscription Owner you need an explicit data-plane
+role — **Key Vault Certificates Officer** — or certificate operations
+fail with `(Forbidden) Caller is not authorized`:
+
+```powershell
+az role assignment create `
+  --role "Key Vault Certificates Officer" `
+  --assignee (az ad signed-in-user show --query id -o tsv) `
+  --scope (az keyvault show --name kv-adomcp-prod --query id -o tsv)
+```
+
+RBAC propagation can take a couple of minutes — if the next command
+still returns Forbidden, wait and retry.
 
 ```powershell
 # Create a self-signed cert with the default policy
