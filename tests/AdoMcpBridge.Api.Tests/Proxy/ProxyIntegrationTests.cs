@@ -17,7 +17,78 @@ public sealed class ProxyIntegrationTests : IClassFixture<ProxyTestFixture>
         var client = _fx.CreateClient();
         var response = await client.GetAsync("/mcp/anything");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-        response.Headers.WwwAuthenticate.ToString().Should().StartWith("Bearer");
+        var challenge = response.Headers.WwwAuthenticate.ToString();
+        challenge.Should().StartWith("Bearer");
+        // RFC 9728: point clients at the bridge's own resource metadata.
+        challenge.Should().Contain(
+            "resource_metadata=\"https://localhost/.well-known/oauth-protected-resource/mcp/anything\"");
+    }
+
+    [Fact]
+    public async Task Upstream_401_challenge_is_replaced_with_bridge_challenge()
+    {
+        _fx.Upstream.Reset();
+        _fx.Upstream.Given(WireMock.RequestBuilders.Request.Create().WithPath("/secured").UsingGet())
+            .RespondWith(WireMock.ResponseBuilders.Response.Create()
+                .WithStatusCode(401)
+                .WithHeader("WWW-Authenticate",
+                    "Bearer resource_metadata=\"https://mcp.dev.azure.com/.well-known/oauth-protected-resource/Enate\""));
+
+        var record = new TokenRecord(
+            TokenHasher.Sha256Hex("ok-401"), "rh5", "cid",
+            Convert.ToBase64String(new byte[] { 1 }),
+            "oid", "u@example.com",
+            _fx.Clock.UtcNow.AddMinutes(30), _fx.Clock.UtcNow.AddDays(14), _fx.Clock.UtcNow);
+        _fx.TokenStore.FindByAccessTokenHashAsync(record.AccessTokenHash, Arg.Any<CancellationToken>())
+            .Returns(record);
+        _fx.Encryptor.DecryptAsync(Arg.Any<byte[]>(), Arg.Any<CancellationToken>())
+            .Returns(new ValueTask<byte[]>(System.Text.Encoding.UTF8.GetBytes("rt")));
+        _fx.EntraClient.AcquireAdoTokenAsync("rt", Arg.Any<CancellationToken>())
+            .Returns(new ValueTask<EntraTokenResult>(
+                new EntraTokenResult("ado-tok", "nrt", _fx.Clock.UtcNow.AddMinutes(50), "oid", "u@example.com")));
+
+        var client = _fx.CreateClient();
+        var req = new HttpRequestMessage(HttpMethod.Get, "/mcp/secured");
+        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "ok-401");
+        var response = await client.SendAsync(req);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var challenge = response.Headers.WwwAuthenticate.ToString();
+        challenge.Should().NotContain("mcp.dev.azure.com");
+        challenge.Should().Contain("ado-mcp-bridge");
+        challenge.Should().Contain(
+            "resource_metadata=\"https://localhost/.well-known/oauth-protected-resource/mcp/secured\"");
+    }
+
+    [Fact]
+    public async Task Upstream_404_passes_through_without_foreign_challenge()
+    {
+        _fx.Upstream.Reset();
+        _fx.Upstream.Given(WireMock.RequestBuilders.Request.Create().WithPath("/missing").UsingGet())
+            .RespondWith(WireMock.ResponseBuilders.Response.Create()
+                .WithStatusCode(404)
+                .WithHeader("WWW-Authenticate", "Bearer realm=\"upstream\""));
+
+        var record = new TokenRecord(
+            TokenHasher.Sha256Hex("ok-404"), "rh6", "cid",
+            Convert.ToBase64String(new byte[] { 1 }),
+            "oid", "u@example.com",
+            _fx.Clock.UtcNow.AddMinutes(30), _fx.Clock.UtcNow.AddDays(14), _fx.Clock.UtcNow);
+        _fx.TokenStore.FindByAccessTokenHashAsync(record.AccessTokenHash, Arg.Any<CancellationToken>())
+            .Returns(record);
+        _fx.Encryptor.DecryptAsync(Arg.Any<byte[]>(), Arg.Any<CancellationToken>())
+            .Returns(new ValueTask<byte[]>(System.Text.Encoding.UTF8.GetBytes("rt")));
+        _fx.EntraClient.AcquireAdoTokenAsync("rt", Arg.Any<CancellationToken>())
+            .Returns(new ValueTask<EntraTokenResult>(
+                new EntraTokenResult("ado-tok", "nrt", _fx.Clock.UtcNow.AddMinutes(50), "oid", "u@example.com")));
+
+        var client = _fx.CreateClient();
+        var req = new HttpRequestMessage(HttpMethod.Get, "/mcp/missing");
+        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "ok-404");
+        var response = await client.SendAsync(req);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        response.Headers.WwwAuthenticate.Should().BeEmpty();
     }
 
     [Fact]
