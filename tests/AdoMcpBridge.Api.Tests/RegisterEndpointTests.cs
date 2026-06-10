@@ -49,4 +49,18 @@ public sealed class RegisterEndpointTests : IClassFixture<BridgeApiFactory>
             new { client_name = "X", redirect_uris = new[] { "http://evil.example/cb" } });
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
+
+    // RFC 8252 §7.3: native apps (Claude Code among them) redirect to a
+    // loopback address over plain http; the AS must accept it.
+    [Theory]
+    [InlineData("http://127.0.0.1:51234/callback")]
+    [InlineData("http://localhost:51234/callback")]
+    [InlineData("http://[::1]:51234/callback")]
+    public async Task Post_register_accepts_http_loopback_redirect(string uri)
+    {
+        var client = _factory.CreateClient();
+        var resp = await client.PostAsJsonAsync("/register",
+            new { client_name = "Claude Code", redirect_uris = new[] { uri } });
+        resp.StatusCode.Should().Be(HttpStatusCode.Created);
+    }
 }

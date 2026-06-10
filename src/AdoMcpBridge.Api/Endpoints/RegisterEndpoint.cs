@@ -22,11 +22,14 @@ public static class RegisterEndpoint
 
             foreach (var u in req.RedirectUris)
             {
+                // RFC 8252 §7.3: native apps redirect to a loopback
+                // address over plain http; everything else must be https.
                 if (!Uri.TryCreate(u, UriKind.Absolute, out var parsed) ||
-                    !string.Equals(parsed.Scheme, "https", StringComparison.OrdinalIgnoreCase))
+                    !(string.Equals(parsed.Scheme, "https", StringComparison.OrdinalIgnoreCase) ||
+                      (string.Equals(parsed.Scheme, "http", StringComparison.OrdinalIgnoreCase) && parsed.IsLoopback)))
                 {
                     return Results.BadRequest(System.Text.Json.JsonDocument.Parse(
-                        OAuthError.InvalidRequest("redirect_uri must be https").ToJson()).RootElement);
+                        OAuthError.InvalidRequest("redirect_uri must be https, or http on a loopback address").ToJson()).RootElement);
                 }
             }
 
