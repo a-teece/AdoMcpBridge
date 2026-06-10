@@ -61,8 +61,9 @@ public sealed class OAuthEndToEndTests : IClassFixture<BridgeApiFactory>
             .Returns(new ValueTask<EntraTokenResult>(new EntraTokenResult(
                 "ado-at", "ent-rt", _f.Clock.UtcNow.AddHours(1), "oid", "alice@test")));
 
+        // Only code + state — Entra sends nothing else to the redirect URI.
         var cb = await http.GetAsync(
-            $"/authorize/callback?code=entra-code&state={Uri.EscapeDataString(entraState!)}&session_id={sessionId}");
+            $"/authorize/callback?code=entra-code&state={Uri.EscapeDataString(entraState!)}");
         cb.StatusCode.Should().Be(HttpStatusCode.Redirect);
         cb.Headers.Location!.ToString().Should().StartWith("https://claude.test/cb?code=");
         var authCode = System.Web.HttpUtility.ParseQueryString(cb.Headers.Location.Query)["code"]!;
