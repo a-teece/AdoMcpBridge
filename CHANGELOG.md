@@ -6,6 +6,13 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.5](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.4...v0.1.5) (2026-06-10)
+
+
+### Bug Fixes
+
+* envelope-encrypt refresh tokens; RSA cannot hold a 2 KB payload ([#37](https://github.com/a-teece/AdoMcpBridge/issues/37)) ([cddfadc](https://github.com/a-teece/AdoMcpBridge/commit/cddfadccad38c19836eb3b7ce635ebd5d760b173))
+
 ## [0.1.4](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.3...v0.1.4) (2026-06-10)
 
 
