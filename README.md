@@ -25,6 +25,10 @@ identity flows through to Azure DevOps.
 
 ## Deploy from a release
 
+**Full step-by-step guide: [`docs/deployment.md`](docs/deployment.md)** —
+covers the Entra app registration, certificate, database setup, client
+connection, hardening, and upgrades.
+
 Each [release](https://github.com/a-teece/AdoMcpBridge/releases) ships a
 cosign-signed container image on GHCR, a versioned Bicep bundle, an SPDX
 SBOM, and `deploy.ps1`. No fork required:
@@ -74,6 +78,8 @@ as ingress IP restrictions.
 
 ## Operations
 
+- [`docs/deployment.md`](docs/deployment.md) — step-by-step deployment
+  guide from empty resource group to connected client.
 - [`docs/runbook.md`](docs/runbook.md) — six alert-paired scenarios with
   executable Kusto queries.
 - [`docs/smoke-runbook.md`](docs/smoke-runbook.md) — nightly smoke tests
