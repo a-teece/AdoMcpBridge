@@ -21,11 +21,15 @@ public sealed class DataServiceCollectionExtensionsTests
             .Build();
 
         var services = new ServiceCollection();
+        // The host registers IClock; the session cache consumes it.
+        services.AddSingleton<AdoMcpBridge.Core.Abstractions.IClock, AdoMcpBridge.Core.Time.SystemClock>();
         services.AddBridgeDataServices(cfg);
         using var sp = services.BuildServiceProvider();
 
         Assert.NotNull(sp.GetService<BridgeDbContext>());
         Assert.IsType<EfTokenStore>(sp.GetRequiredService<ITokenStore>());
+        Assert.IsType<EfAuthorizationSessionCache>(
+            sp.GetRequiredService<AdoMcpBridge.Core.OAuth.IAuthorizationSessionCache>());
         var kvOpts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<KeyVaultOptions>>().Value;
         Assert.Equal("token-dek", kvOpts.DekName);
     }

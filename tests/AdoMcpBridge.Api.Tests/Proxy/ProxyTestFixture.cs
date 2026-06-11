@@ -42,10 +42,13 @@ public sealed class ProxyTestFixture : WebApplicationFactory<Program>, IAsyncDis
             services.RemoveAll<IKeyVaultEncryptor>();
             services.RemoveAll<ITokenStore>();
             services.RemoveAll<IClock>();
+            services.RemoveAll<AdoMcpBridge.Core.OAuth.IAuthorizationSessionCache>();
             services.AddSingleton(EntraClient);
             services.AddSingleton(Encryptor);
             services.AddSingleton(TokenStore);
             services.AddSingleton(Clock);
+            services.AddSingleton<AdoMcpBridge.Core.OAuth.IAuthorizationSessionCache>(
+                new AdoMcpBridge.Core.OAuth.InMemoryAuthorizationSessionCache(Clock));
         });
     }
 

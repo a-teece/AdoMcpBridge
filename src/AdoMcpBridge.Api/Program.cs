@@ -19,7 +19,8 @@ builder.Services.AddSingleton<PkceValidator>();
 // Scoped, not singleton: it consumes ITokenStore, which is scoped to
 // the request (EF DbContext lifetime).
 builder.Services.AddScoped<AuthorizeRequestValidator>();
-builder.Services.AddSingleton<IAuthorizationSessionCache, InMemoryAuthorizationSessionCache>();
+// IAuthorizationSessionCache is registered (SQL-backed) inside
+// AddBridgeDataServices; the in-memory implementation remains for tests.
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddRazorPages();
 builder.Services.AddMcpProxy(builder.Configuration);

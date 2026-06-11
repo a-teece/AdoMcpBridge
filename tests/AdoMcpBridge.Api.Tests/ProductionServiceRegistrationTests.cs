@@ -45,5 +45,8 @@ public class ProductionServiceRegistrationTests
         Assert.Contains(captured, d => d.ServiceType == typeof(IEntraTokenClient));
         Assert.Contains(captured, d =>
             d.ServiceType == typeof(ICertificateProvider) && d.ImplementationType == typeof(CertificateProvider));
+        Assert.Contains(captured, d =>
+            d.ServiceType == typeof(Core.OAuth.IAuthorizationSessionCache)
+            && d.ImplementationType == typeof(EfAuthorizationSessionCache));
     }
 }
