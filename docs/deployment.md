@@ -82,14 +82,19 @@ $APP_ID = az ad app create `
   --sign-in-audience AzureADMyOrg `
   --query appId -o tsv
 
-# Look up the user_impersonation scope id on the Azure DevOps resource
-$ADO_RESOURCE = '499b84ac-1321-427f-aa17-267ca6975798'
-$SCOPE_ID = az ad sp show --id $ADO_RESOURCE `
-  --query "oauth2PermissionScopes[?value=='user_impersonation'].id | [0]" -o tsv
+# The Remote MCP server is its own Entra resource (NOT classic Azure
+# DevOps): app 2a72489c-aab2-4b65-b93a-a91edccf33b8, delegated scope
+# Ado.Mcp.Tools. Its service principal may not exist in your tenant
+# yet — create it first (harmless if it already exists).
+$MCP_RESOURCE = '2a72489c-aab2-4b65-b93a-a91edccf33b8'
+az ad sp create --id $MCP_RESOURCE 2>$null
+
+$SCOPE_ID = az ad sp show --id $MCP_RESOURCE `
+  --query "oauth2PermissionScopes[?value=='Ado.Mcp.Tools'].id | [0]" -o tsv
 
 # Request the delegated permission and grant tenant-wide admin consent
 az ad app permission add --id $APP_ID `
-  --api $ADO_RESOURCE --api-permissions "$SCOPE_ID=Scope"
+  --api $MCP_RESOURCE --api-permissions "$SCOPE_ID=Scope"
 az ad app permission admin-consent --id $APP_ID
 
 # Print the two values you need later
@@ -100,9 +105,25 @@ az ad app permission admin-consent --id $APP_ID
 Note the two values printed at the end — they go into the environment
 variables in step 4.
 
-`offline_access` is requested at runtime as an OAuth scope; it needs no
-API-permission entry. The redirect URI is added in step 7, once the
-deployed hostname is known. The certificate is attached in step 6.
+**Verify the consent actually recorded** — `admin-consent` can silently
+miss a permission added seconds earlier (propagation race). Confirm the
+grant lists `Ado.Mcp.Tools`:
+
+```powershell
+$SP_ID = az ad sp show --id $APP_ID --query id -o tsv
+az rest --method get `
+  --url "https://graph.microsoft.com/v1.0/servicePrincipals/$SP_ID/oauth2PermissionGrants" `
+  --query "value[].scope" -o tsv
+```
+
+If `Ado.Mcp.Tools` is missing, re-run the `admin-consent` line (or
+approve the consent prompt during the first sign-in — as a tenant admin
+you can tick "Consent on behalf of your organization").
+
+`openid`, `profile`, and `offline_access` are requested at runtime as
+OAuth scopes; they need no API-permission entry. The redirect URI is
+added in step 7, once the deployed hostname is known. The certificate
+is attached in step 6.
 
 ## 2. Create the SQL admin security group
 
@@ -357,10 +378,13 @@ is up. For a full end-to-end check (discovery → DCR → token →
 
 ## 10. Connect clients
 
-**Claude Code** — add the bridge as an HTTP MCP server:
+**Claude Code** — add the bridge as an HTTP MCP server. The URL must
+include your Azure DevOps **organization name** (whatever follows
+`https://dev.azure.com/`) — Microsoft's MCP server lives at
+`https://mcp.dev.azure.com/{org}` and a bare `/mcp` proxies to a 401:
 
 ```powershell
-claude mcp add --transport http ado https://<fqdn>/mcp
+claude mcp add --transport http ado https://<fqdn>/mcp/<your-ado-org>
 ```
 
 OAuth is discovered automatically via
@@ -438,6 +462,8 @@ The first-time setup steps (1–4 and 6–8) remain manual either way.
 | Container crash-loops after step 5 | Expected until steps 6–8 are done; check `az containerapp logs show` afterwards |
 | `Login failed for user '<token-identified principal>'` in logs | Step 8 contained-user grant missing or wrong MI name |
 | OAuth flow redirects fail | Redirect URI in the app registration doesn't exactly match `https://<fqdn>/authorize/callback`, or `issuerOverride` still unset |
+| Claude: `Protected resource https://mcp.dev.azure.com/... does not match expected ...` | Upstream 401 leaked through the proxy: MCP URL missing the `/<org>` segment, or the `Ado.Mcp.Tools` grant is missing (see step 1 verification). Restart Claude Code after fixing — it caches the failure |
+| Users see an Entra consent prompt despite admin consent | The step 1 consent race — re-run `az ad app permission admin-consent` and verify the grant |
 
 For operational incidents after go-live, [`docs/runbook.md`](runbook.md)
 pairs every alert with a Kusto query and a procedure.

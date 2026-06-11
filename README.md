@@ -43,9 +43,11 @@ pwsh ./deploy.ps1 -Env dev -Tag vX.Y.Z `
 Prerequisites: PowerShell 7+, Azure CLI, [cosign](https://docs.sigstore.dev/cosign/system_config/installation/)
 (the script verifies the image signature before deploying), an Entra app
 registration with certificate auth (cert named `ado-mcp-bridge` in the
-deployed Key Vault) admin-consented for
-`499b84ac-1321-427f-aa17-267ca6975798/user_impersonation` +
-`offline_access`, and an AAD group for SQL admin. Per-environment values
+deployed Key Vault) admin-consented for the Remote MCP server's
+delegated scope `Ado.Mcp.Tools` (resource app
+`2a72489c-aab2-4b65-b93a-a91edccf33b8` — *not* the classic ADO
+`499b84ac.../user_impersonation` scope, which the MCP server rejects),
+and an AAD group for SQL admin. Per-environment values
 are supplied via environment variables read by
 `infra/main.{env}.bicepparam` (`ADOMCP_TENANT_ID`, `ADOMCP_CLIENT_ID`,
 `ADOMCP_IMAGE`, `ADOMCP_SQL_ADMIN_GROUP_OID`).
@@ -70,8 +72,10 @@ as ingress IP restrictions.
 ## Connect a client
 
 - **Claude Code** — add an MCP server pointing at
-  `https://<your-bridge-fqdn>/mcp`; OAuth is discovered automatically
-  via `/.well-known/oauth-authorization-server`.
+  `https://<your-bridge-fqdn>/mcp/<your-ado-org>` (the org segment is
+  required — Microsoft's server lives at `mcp.dev.azure.com/{org}`);
+  OAuth is discovered automatically via
+  `/.well-known/oauth-authorization-server`.
 - **Claude Desktop (org connector)** — an org admin registers a Custom
   Connector against the same `/authorize` + `/token` endpoints;
   `/connector-info.json` serves the connector card metadata.
