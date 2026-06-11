@@ -27,6 +27,9 @@ public sealed class BearerAuthenticationMiddlewareTests
         public DateTimeOffset UtcNow { get; set; } = new(2026, 6, 9, 12, 0, 0, TimeSpan.Zero);
     }
 
+    private static Microsoft.Extensions.Options.IOptions<Api.Options.AdoMcpOptions> TestOpts() =>
+        Microsoft.Extensions.Options.Options.Create(new Api.Options.AdoMcpOptions { Issuer = "https://test.local" });
+
     [Fact]
     public async Task Missing_authorization_header_returns_401_with_www_authenticate()
     {
@@ -35,7 +38,7 @@ public sealed class BearerAuthenticationMiddlewareTests
         var ctx = new DefaultHttpContext { Response = { Body = new MemoryStream() } };
 
         var mw = new BearerAuthenticationMiddleware(_ => Task.CompletedTask, NullLogger<BearerAuthenticationMiddleware>.Instance);
-        await mw.InvokeAsync(ctx, store, clock);
+        await mw.InvokeAsync(ctx, store, clock, TestOpts());
 
         ctx.Response.StatusCode.Should().Be(401);
         ctx.Response.Headers["WWW-Authenticate"].ToString().Should().StartWith("Bearer");
@@ -52,7 +55,7 @@ public sealed class BearerAuthenticationMiddlewareTests
         ctx.Request.Headers["Authorization"] = "Bearer bogus";
 
         var mw = new BearerAuthenticationMiddleware(_ => Task.CompletedTask, NullLogger<BearerAuthenticationMiddleware>.Instance);
-        await mw.InvokeAsync(ctx, store, clock);
+        await mw.InvokeAsync(ctx, store, clock, TestOpts());
 
         ctx.Response.StatusCode.Should().Be(401);
         ctx.Response.Headers["WWW-Authenticate"].ToString().Should().Contain("invalid_token");
@@ -71,7 +74,7 @@ public sealed class BearerAuthenticationMiddlewareTests
         ctx.Request.Headers["Authorization"] = "Bearer opaque-access";
 
         var mw = new BearerAuthenticationMiddleware(_ => Task.CompletedTask, NullLogger<BearerAuthenticationMiddleware>.Instance);
-        await mw.InvokeAsync(ctx, store, clock);
+        await mw.InvokeAsync(ctx, store, clock, TestOpts());
 
         ctx.Response.StatusCode.Should().Be(401);
         ctx.Response.Headers["WWW-Authenticate"].ToString().Should().Contain("invalid_token");
@@ -92,7 +95,7 @@ public sealed class BearerAuthenticationMiddlewareTests
 
         var mw = new BearerAuthenticationMiddleware(_ => { nextCalled = true; return Task.CompletedTask; },
             NullLogger<BearerAuthenticationMiddleware>.Instance);
-        await mw.InvokeAsync(ctx, store, clock);
+        await mw.InvokeAsync(ctx, store, clock, TestOpts());
 
         nextCalled.Should().BeTrue();
         ctx.Items[HttpContextItemKeys.TokenRecord].Should().BeSameAs(record);
@@ -109,7 +112,7 @@ public sealed class BearerAuthenticationMiddlewareTests
         ctx.Request.Headers["Authorization"] = "Bearer SECRET-LITERAL";
 
         var mw = new BearerAuthenticationMiddleware(_ => Task.CompletedTask, NullLogger<BearerAuthenticationMiddleware>.Instance);
-        await mw.InvokeAsync(ctx, store, new FixedClock());
+        await mw.InvokeAsync(ctx, store, new FixedClock(), TestOpts());
 
         ctx.Response.Body.Position = 0;
         var body = await new StreamReader(ctx.Response.Body, Encoding.UTF8).ReadToEndAsync();
