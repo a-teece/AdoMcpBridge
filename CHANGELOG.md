@@ -8,6 +8,8 @@ Commit messages — do not hand-edit released sections.
 
 ## [0.1.6](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.5...v0.1.6) (2026-06-11)
 
+> **Note:** v0.1.6 published no artifacts — its release build failed before checkout (#46). Use v0.1.7, which contains the same changes.
+
 
 ### Features
 
