@@ -6,6 +6,19 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.6](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.5...v0.1.6) (2026-06-11)
+
+
+### Features
+
+* persist authorization sessions in SQL ([#45](https://github.com/a-teece/AdoMcpBridge/issues/45)) ([91ffc4d](https://github.com/a-teece/AdoMcpBridge/commit/91ffc4d5ea79f954f4b8c81cfd29d4bfc45e23db))
+
+
+### Bug Fixes
+
+* request the MCP server scope, not the classic ADO scope ([#39](https://github.com/a-teece/AdoMcpBridge/issues/39)) ([92b1e3a](https://github.com/a-teece/AdoMcpBridge/commit/92b1e3a8697004f5441616f578660e6a125a83f2))
+* serve RFC 9728 metadata and own every 401 challenge ([#44](https://github.com/a-teece/AdoMcpBridge/issues/44)) ([5758f8d](https://github.com/a-teece/AdoMcpBridge/commit/5758f8d92e9eb1a759d37ca970eeab1722996392))
+
 ## [0.1.5](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.4...v0.1.5) (2026-06-10)
 
 
