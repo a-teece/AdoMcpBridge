@@ -79,7 +79,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v4
+        uses: sigstore/cosign-installer@v4.1.2
         with:
           cosign-release: v2.4.1
 
