@@ -1,13 +1,18 @@
+using AdoMcpBridge.Api.CustomTools;
+using AdoMcpBridge.Api.CustomTools.Tools;
 using AdoMcpBridge.Api.Endpoints;
 using AdoMcpBridge.Api.Middleware;
 using AdoMcpBridge.Api.Options;
 using AdoMcpBridge.Api.Proxy;
 using AdoMcpBridge.Api.Telemetry;
 using AdoMcpBridge.Core.Abstractions;
+using AdoMcpBridge.Core.BlobStorage;
 using AdoMcpBridge.Core.DependencyInjection;
 using AdoMcpBridge.Core.Entra;
 using AdoMcpBridge.Core.OAuth;
 using AdoMcpBridge.Core.Time;
+using Azure.Core;
+using Azure.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddBridgeTelemetry(builder.Configuration);
@@ -23,6 +28,21 @@ builder.Services.AddScoped<AuthorizeRequestValidator>();
 // AddBridgeDataServices; the in-memory implementation remains for tests.
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddRazorPages();
+
+// Blob storage for upload slots (large field write path, ADR-0003).
+builder.Services.AddBlobSlotStore(builder.Configuration);
+
+// ADO REST client authenticated via managed identity.
+// The MI must be a member of the ADO organisation with work-item edit rights.
+builder.Services.AddSingleton<TokenCredential>(_ => new DefaultAzureCredential());
+builder.Services.AddHttpClient<IAdoRestClient, AdoRestClient>();
+
+// Custom MCP tools — registered as ICustomMcpTool so the middleware can
+// resolve them all at once via IEnumerable<ICustomMcpTool>.
+builder.Services.AddSingleton<ICustomMcpTool, DownloadFieldTool>();
+builder.Services.AddSingleton<ICustomMcpTool, CreateUploadSlotTool>();
+builder.Services.AddSingleton<ICustomMcpTool, WriteFieldFromSlotTool>();
+
 builder.Services.AddMcpProxy(builder.Configuration);
 
 var app = builder.Build();

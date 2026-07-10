@@ -97,6 +97,16 @@ module containerapp 'modules/containerapp.bicep' = {
     sqlDatabaseName: sql.outputs.databaseName
     acrLoginServer: acr.outputs.loginServer
     allowedIpRanges: allowedIpRanges
+    blobStorageAccountUri: storage.outputs.blobEndpointUri
+  }
+}
+
+module storage 'modules/storage.bicep' = {
+  name: 'storage'
+  params: {
+    env: env
+    location: location
+    miPrincipalId: identity.outputs.principalId
   }
 }
 
@@ -119,3 +129,4 @@ output sqlServerFqdn string = sql.outputs.serverFqdn
 output acrLoginServer string = acr.outputs.loginServer
 output managedIdentityClientId string = identity.outputs.clientId
 output appInsightsConnectionString string = observability.outputs.appInsightsConnectionString
+output storageAccountUri string = storage.outputs.blobEndpointUri

@@ -1,7 +1,10 @@
+using AdoMcpBridge.Api.CustomTools;
 using AdoMcpBridge.Core.Abstractions;
+using AdoMcpBridge.Core.BlobStorage;
 using AdoMcpBridge.Core.Data;
 using AdoMcpBridge.Core.Entra;
 using AdoMcpBridge.Core.KeyVault;
+using Azure.Core;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,6 +35,7 @@ public class ProductionServiceRegistrationTests
                         ["AdoMcp:Issuer"] = "https://test.local",
                         ["AdoMcp:Entra:TenantId"] = "tid",
                         ["AdoMcp:Entra:ClientId"] = "cid",
+                        ["AdoMcp:BlobStorage:AccountUri"] = "https://stadomcptest.blob.core.windows.net/",
                     }));
                 b.ConfigureServices(s => captured = s);
             });
@@ -48,5 +52,8 @@ public class ProductionServiceRegistrationTests
         Assert.Contains(captured, d =>
             d.ServiceType == typeof(Core.OAuth.IAuthorizationSessionCache)
             && d.ImplementationType == typeof(EfAuthorizationSessionCache));
+        Assert.Contains(captured, d => d.ServiceType == typeof(IBlobSlotStore));
+        Assert.Contains(captured, d => d.ServiceType == typeof(TokenCredential));
+        Assert.Contains(captured, d => d.ServiceType == typeof(IAdoRestClient));
     }
 }

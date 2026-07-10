@@ -1,5 +1,8 @@
+using AdoMcpBridge.Api.CustomTools;
 using AdoMcpBridge.Core.Abstractions;
+using AdoMcpBridge.Core.BlobStorage;
 using AdoMcpBridge.Core.Tests;
+using Azure.Core;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -15,6 +18,9 @@ public class BridgeApiFactory : WebApplicationFactory<Program>
     public IKeyVaultEncryptor Encryptor { get; } = Substitute.For<IKeyVaultEncryptor>();
     public TestClock Clock { get; } = new();
     public InMemoryTokenStore Store { get; } = new();
+    public IBlobSlotStore BlobSlotStore { get; } = Substitute.For<IBlobSlotStore>();
+    public IAdoRestClient AdoRestClient { get; } = Substitute.For<IAdoRestClient>();
+    public TokenCredential TokenCredential { get; } = Substitute.For<TokenCredential>();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -32,6 +38,7 @@ public class BridgeApiFactory : WebApplicationFactory<Program>
                 ["AdoMcp:Entra:TenantId"] = "tid",
                 ["AdoMcp:Entra:ClientId"] = "wrapper-app",
                 ["AdoMcp:Entra:Authority"] = "https://login.microsoftonline.com/tid/v2.0",
+                ["AdoMcp:BlobStorage:AccountUri"] = "https://stadomcptest.blob.core.windows.net/",
             });
         });
         builder.ConfigureServices(s =>
@@ -41,12 +48,18 @@ public class BridgeApiFactory : WebApplicationFactory<Program>
             s.RemoveAll<IClock>();
             s.RemoveAll<ITokenStore>();
             s.RemoveAll<AdoMcpBridge.Core.OAuth.IAuthorizationSessionCache>();
+            s.RemoveAll<TokenCredential>();
+            s.RemoveAll<IBlobSlotStore>();
+            s.RemoveAll<IAdoRestClient>();
             s.AddSingleton(EntraClient);
             s.AddSingleton(Encryptor);
             s.AddSingleton<IClock>(Clock);
             s.AddSingleton<ITokenStore>(Store);
             s.AddSingleton<AdoMcpBridge.Core.OAuth.IAuthorizationSessionCache>(
                 new AdoMcpBridge.Core.OAuth.InMemoryAuthorizationSessionCache(Clock));
+            s.AddSingleton(TokenCredential);
+            s.AddSingleton(BlobSlotStore);
+            s.AddSingleton(AdoRestClient);
 
             Encryptor.EncryptAsync(Arg.Any<byte[]>(), Arg.Any<CancellationToken>())
                 .Returns(ci => new ValueTask<byte[]>(ci.Arg<byte[]>()));

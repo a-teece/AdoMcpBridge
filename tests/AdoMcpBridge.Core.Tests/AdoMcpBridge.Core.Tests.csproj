@@ -15,9 +15,9 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.0" />
     <PackageReference Include="WireMock.Net" Version="1.6.7" />
-    <!-- Pin a patched System.Linq.Dynamic.Core; WireMock.Net 1.6.7 pulls a
-         vulnerable 1.3.12 transitively (GHSA-4cv2-4hjh-77rx / NU1903). -->
+    <!-- Pin patched transitive dependencies pulled by WireMock.Net 1.6.7. -->
     <PackageReference Include="System.Linq.Dynamic.Core" Version="1.7.2" />
+    <PackageReference Include="Scriban.Signed" Version="7.2.5" />
     <PackageReference Include="FluentAssertions" Version="7.0.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.2.0" />
     <PackageReference Include="coverlet.msbuild" Version="6.0.2">
