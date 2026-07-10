@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Azure.Storage.Blobs;
 using Azure.Storage.Sas;
 using Microsoft.Extensions.Logging;
@@ -5,6 +6,8 @@ using Microsoft.Extensions.Options;
 
 namespace AdoMcpBridge.Core.BlobStorage;
 
+[ExcludeFromCodeCoverage(Justification =
+    "All methods make live Azure Blob SDK calls requiring a real storage account; covered by post-deploy integration smoke tests, not unit-testable.")]
 internal sealed class BlobSlotStore : IBlobSlotStore
 {
     private readonly BlobServiceClient _service;
