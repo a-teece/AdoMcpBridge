@@ -18,6 +18,7 @@ internal sealed class WitGetSlimTool : ICustomMcpTool
     }
 
     public string Name => "ado_bridge_wit_get";
+    public object? Annotations => new { readOnlyHint = true };
 
     public string Description =>
         "Gets an Azure DevOps work item with all long-text fields (HTML descriptions, repro steps, " +

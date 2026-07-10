@@ -20,6 +20,7 @@ internal sealed class WitGetBatchSlimTool : ICustomMcpTool
     }
 
     public string Name => "ado_bridge_wit_get_batch";
+    public object? Annotations => new { readOnlyHint = true };
 
     public string Description =>
         "Gets multiple Azure DevOps work items (up to 200) with all long-text fields replaced by " +

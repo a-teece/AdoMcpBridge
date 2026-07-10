@@ -14,6 +14,7 @@ internal sealed class DownloadFieldTool : ICustomMcpTool
     }
 
     public string Name => "ado_bridge_download_field";
+    public object? Annotations => new { readOnlyHint = true };
     public string Description =>
         "Downloads a large Azure DevOps work-item long-text field (e.g. System.Description or " +
         "Custom.ImplementationPlan) and returns its content as plain markdown. " +

@@ -15,6 +15,7 @@ internal sealed class CreateUploadSlotTool : ICustomMcpTool
     }
 
     public string Name => "ado_bridge_create_upload_slot";
+    public object? Annotations => new { readOnlyHint = false };
     public string Description =>
         "Creates a short-lived pre-signed upload slot for transferring large text content to the " +
         "bridge without routing it through the model. Returns a write-only SAS URL and a slot ID. " +
