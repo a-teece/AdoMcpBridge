@@ -18,7 +18,10 @@
     <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Proxy helpers/middleware are internal; the test project exercises them directly. -->
+    <!-- Proxy helpers/middleware are internal; the test project exercises them directly.
+         DynamicProxyGenAssembly2 is Castle's runtime-generated proxy assembly; NSubstitute
+         needs it to mock internal interfaces without strong-naming the assembly. -->
     <InternalsVisibleTo Include="AdoMcpBridge.Api.Tests" />
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
   </ItemGroup>
 </Project>
