@@ -1,3 +1,4 @@
+using AdoMcpBridge.Api.CustomTools;
 using AdoMcpBridge.Api.Middleware;
 using Yarp.ReverseProxy.Transforms;
 
@@ -29,6 +30,7 @@ internal static class YarpRegistration
             branch.UseMiddleware<ProxyErrorMappingMiddleware>();
             branch.UseMiddleware<BearerAuthenticationMiddleware>();
             branch.UseMiddleware<EntraTokenSwapMiddleware>();
+            branch.UseMiddleware<CustomToolMiddleware>();
             branch.UseMiddleware<HeaderPassthroughMiddleware>();
             branch.UseRouting();
             branch.UseEndpoints(endpoints => endpoints.MapReverseProxy());

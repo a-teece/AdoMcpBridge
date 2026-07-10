@@ -56,6 +56,9 @@ param acrLoginServer string
 @description('IP allowlist applied as ingress IP restrictions. Default is open.')
 param allowedIpRanges array = [ '0.0.0.0/0' ]
 
+@description('Blob service endpoint URI for the upload-slots storage account.')
+param blobStorageAccountUri string
+
 var isOpen = length(allowedIpRanges) == 1 && allowedIpRanges[0] == '0.0.0.0/0'
 var ipRestrictions = [for (range, i) in allowedIpRanges: {
   name: 'allow-${i}'
@@ -139,6 +142,7 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
             { name: 'AdoMcp__Database__ConnectionString', value: 'Server=tcp:${sqlServerFqdn},1433;Database=${sqlDatabaseName};Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;' }
             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
             { name: 'AZURE_CLIENT_ID', value: miClientId }
+            { name: 'AdoMcp__BlobStorage__AccountUri', value: blobStorageAccountUri }
           ]
           probes: [
             {
