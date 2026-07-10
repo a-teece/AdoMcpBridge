@@ -9,11 +9,12 @@ It deploys from a published release — **no fork required**. Each
 cosign-signed container image on GHCR, versioned Bicep templates, an
 SPDX SBOM, and `deploy.ps1`.
 
-> **Heads-up on manual steps.** Three things cannot be done by the Bicep
+> **Heads-up on manual steps.** Four things cannot be done by the Bicep
 > templates and are genuinely manual today: creating the Entra app
 > certificate (step 6), creating the SQL contained user for the managed
-> identity (step 8), and applying the EF Core schema migrations
-> (step 8). The guide calls each out where it happens.
+> identity (step 8), applying the EF Core schema migrations (step 8),
+> and adding the bridge's managed identity to your Azure DevOps
+> organisation (step 9). The guide calls each out where it happens.
 
 ## What you end up with
 
@@ -24,9 +25,10 @@ the same pattern):
 |---|---|---|
 | Container App | `ca-adomcp-prod` | The bridge itself (HTTPS ingress, scale 0–5) |
 | Container Apps Environment | `cae-adomcp-prod` | Hosting environment |
-| User-assigned managed identity | `id-adomcp-prod` | App identity for Key Vault, SQL, ACR |
+| User-assigned managed identity | `id-adomcp-prod` | App identity for Key Vault, SQL, ACR, and blob storage |
 | Key Vault | `kv-adomcp-prod` | Entra app certificate + token-encryption DEK |
 | Azure SQL Serverless | `sql-adomcp-prod` / `sqldb-adomcp` | Token store (Entra-only auth, no SQL passwords) |
+| Storage account | `stadomcpprod` | Short-lived upload slots for large ADO field writes (private, no account key) |
 | ACR (Basic) | — | Provisioned for optional image import; releases pull from GHCR |
 | App Insights + Log Analytics | — | OpenTelemetry traces, metrics, alerts |
 
@@ -364,7 +366,79 @@ az containerapp revision restart -n ca-adomcp-prod -g rg-adomcp-prod `
   --revision (az containerapp revision list -n ca-adomcp-prod -g rg-adomcp-prod --query "[0].name" -o tsv)
 ```
 
-## 9. Verify
+## 9. Add the managed identity to your Azure DevOps organisation
+
+The `ado_bridge_download_field` and `ado_bridge_write_field_from_slot`
+custom tools call the ADO REST API authenticated as the bridge's managed
+identity (`id-adomcp-{env}`). ADO treats managed identities as service
+principals — they must be added to your organisation before any REST
+calls will succeed.
+
+> **Why MI and not user impersonation?** The MCP token the bridge holds
+> is scoped to `https://mcp.dev.azure.com` (for the upstream proxy). A
+> different audience (`499b84ac-1321-427f-aa17-267ca6975798`) is needed
+> for the ADO REST API, and requesting it requires a separate token
+> acquisition. Using the MI keeps credential plumbing simple and means
+> WI edits are attributed to the bridge service identity — see ADR-0003.
+
+### 9a. Add the identity to the organisation
+
+1. Go to **`https://dev.azure.com/{your-org}/_settings/users`**
+   (Organisation Settings → Users).
+2. Click **Add users**.
+3. In the search box, paste the MI's **display name** (`id-adomcp-prod`)
+   or its **Object ID** (retrieved with the command below).
+4. Set **Access level** to **Basic** (Stakeholder is not enough for
+   work-item edits).
+5. Click **Add**.
+
+```powershell
+# Retrieve the MI object ID to paste into the ADO user search
+az identity show -g rg-adomcp-prod -n id-adomcp-prod --query principalId -o tsv
+```
+
+> **Propagation delay.** ADO user provisioning can take a few minutes.
+> If REST calls return 401 immediately after adding the identity, wait
+> two minutes and retry.
+
+### 9b. Grant work-item permissions in each project
+
+Adding the identity at the org level gives it access to the
+organisation, but work-item read/write is project-scoped. For each ADO
+project whose work items you want the bridge to read or update:
+
+1. Go to **`https://dev.azure.com/{org}/{project}/_settings/security`**
+   (Project Settings → Permissions).
+2. Open the **Contributors** group.
+3. Click **Members → Add** and search for `id-adomcp-prod`.
+
+Alternatively, grant a narrower permission set: Project Settings →
+Boards → Work Items (select an area) and explicitly allow **View work
+items in this node** and **Edit work items in this node** for the MI.
+
+> **What permissions does the tool actually use?**
+> - `ado_bridge_download_field` — `GET /_apis/wit/workitems/{id}?fields=...`
+>   requires "View work items in this node" (read-only).
+> - `ado_bridge_write_field_from_slot` — `PATCH /_apis/wit/workitems/{id}`
+>   requires "Edit work items in this node".
+
+### 9c. Verify
+
+```powershell
+# Fetch a work item field to confirm the MI can authenticate to ADO REST.
+# Run from a machine with 'az login' using the MI (or from the Container App).
+$TOKEN = az account get-access-token `
+  --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv
+Invoke-RestMethod `
+  -Uri "https://dev.azure.com/{org}/{project}/_apis/wit/workitems/1?api-version=7.1" `
+  -Headers @{ Authorization = "Bearer $TOKEN" }
+```
+
+A 200 response containing the work item confirms the permissions are
+in place. A 203 response (non-authoritative) or 401/403 means the MI
+is not yet a member or lacks permissions — re-check steps 9a/9b.
+
+## 10. Verify
 
 ```powershell
 Invoke-RestMethod "https://$FQDN/healthz"                                  # → ok
@@ -376,7 +450,7 @@ All three returning 200 with your FQDN as the issuer means the bridge
 is up. For a full end-to-end check (discovery → DCR → token →
 `tools/list`), see [`docs/smoke-runbook.md`](smoke-runbook.md).
 
-## 10. Connect clients
+## 11. Connect clients
 
 **Claude Code** — add the bridge as an HTTP MCP server. The URL must
 include your Azure DevOps **organization name** (whatever follows
@@ -401,7 +475,7 @@ registers a Custom Connector pointing at the bridge URL; the
 Each user signs in with their own Entra account — their real identity
 flows through to Azure DevOps, so existing ADO permissions apply.
 
-## 11. Hardening
+## 12. Hardening
 
 Ingress is **open to the internet by default**
 (`allowedIpRanges = ['0.0.0.0/0']`). The OAuth layer protects the MCP
@@ -411,7 +485,7 @@ endpoints, but for production you should restrict ingress: populate
 plus your corporate egress IPs, and re-run `deploy.ps1`. The values are
 applied as Container App ingress IP restrictions.
 
-## 12. Upgrading to a new release
+## 13. Upgrading to a new release
 
 ```powershell
 git fetch --tags
@@ -432,7 +506,7 @@ To roll back, deploy the previous tag the same way (unless the
 changelog flagged an irreversible migration — see
 [`docs/runbook.md`](runbook.md), scenario 6).
 
-## 13. Automated CD from your own repo (advanced)
+## 14. Automated CD from your own repo (advanced)
 
 If you'd rather deploy via GitHub Actions than a workstation, this repo
 ships a reusable workflow
@@ -450,7 +524,7 @@ Azure credentials in your repo.
    example lives at
    [`docs/adopters/example-consumer.yml`](adopters/example-consumer.yml).
 
-The first-time setup steps (1–4 and 6–8) remain manual either way.
+The first-time setup steps (1–4, 6–8, and 9) remain manual either way.
 
 ## Troubleshooting first deploys
 
@@ -464,6 +538,8 @@ The first-time setup steps (1–4 and 6–8) remain manual either way.
 | OAuth flow redirects fail | Redirect URI in the app registration doesn't exactly match `https://<fqdn>/authorize/callback`, or `issuerOverride` still unset |
 | Claude: `Protected resource https://mcp.dev.azure.com/... does not match expected ...` | Upstream 401 leaked through the proxy: MCP URL missing the `/<org>` segment, or the `Ado.Mcp.Tools` grant is missing (see step 1 verification). Restart Claude Code after fixing — it caches the failure |
 | Users see an Entra consent prompt despite admin consent | The step 1 consent race — re-run `az ad app permission admin-consent` and verify the grant |
+| `ado_bridge_download_field` or `ado_bridge_write_field_from_slot` returns 401/403 | Bridge MI not added to the ADO organisation or not a member of the target project — see step 9 |
+| `ado_bridge_write_field_from_slot` returns 403 on PATCH | MI has read-only access; it needs "Edit work items in this node" — grant via Contributors group (step 9b) |
 
 For operational incidents after go-live, [`docs/runbook.md`](runbook.md)
 pairs every alert with a Kusto query and a procedure.
