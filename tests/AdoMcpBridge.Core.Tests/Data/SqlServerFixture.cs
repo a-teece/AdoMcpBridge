@@ -20,7 +20,18 @@ public sealed class SqlServerFixture : IAsyncLifetime
             .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
             .Build();
 
-        await _container.StartAsync();
+        try
+        {
+            await _container.StartAsync();
+        }
+        catch (Exception)
+        {
+            // Container start failed (e.g. Ryuk pull error, rate limit, daemon
+            // restart). Treat as unavailable so tests skip rather than fail.
+            DockerAvailable = false;
+            _container = null;
+            return;
+        }
         ConnectionString = _container.GetConnectionString();
 
         var opts = new DbContextOptionsBuilder<BridgeDbContext>()
