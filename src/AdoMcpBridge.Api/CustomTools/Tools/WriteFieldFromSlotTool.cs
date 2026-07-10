@@ -14,12 +14,12 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
     public WriteFieldFromSlotTool(
         IBlobSlotStore blobs, IAdoRestClient ado, ILogger<WriteFieldFromSlotTool> logger)
     {
-        _blobs  = blobs;
-        _ado    = ado;
+        _blobs = blobs;
+        _ado = ado;
         _logger = logger;
     }
 
-    public string Name        => "ado_bridge_write_field_from_slot";
+    public string Name => "ado_bridge_write_field_from_slot";
     public string Description =>
         "Transfers content from a previously created upload slot into an Azure DevOps work-item " +
         "long-text field. The bridge verifies the SHA-256 hash of the uploaded content, " +
@@ -33,23 +33,23 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
         type = "object",
         properties = new
         {
-            slotId       = new { type = "string", description = "Slot ID returned by ado_bridge_create_upload_slot." },
+            slotId = new { type = "string", description = "Slot ID returned by ado_bridge_create_upload_slot." },
             organization = new { type = "string", description = "ADO organisation name." },
-            project      = new { type = "string", description = "ADO project name." },
-            workItemId   = new { type = "integer", description = "Work-item numeric id." },
+            project = new { type = "string", description = "ADO project name." },
+            workItemId = new { type = "integer", description = "Work-item numeric id." },
             fieldRefName = new { type = "string", description = "Field reference name (e.g. System.Description)." },
-            sha256       = new { type = "string", description = "Lowercase hex SHA-256 of the uploaded markdown bytes." },
+            sha256 = new { type = "string", description = "Lowercase hex SHA-256 of the uploaded markdown bytes." },
         },
         required = new[] { "slotId", "organization", "project", "workItemId", "fieldRefName", "sha256" },
     };
 
     public async Task<McpToolResult> InvokeAsync(JsonElement arguments, CancellationToken ct)
     {
-        var slotId      = arguments.GetProperty("slotId").GetString()!;
-        var org         = arguments.GetProperty("organization").GetString()!;
-        var project     = arguments.GetProperty("project").GetString()!;
-        var workItemId  = arguments.GetProperty("workItemId").GetInt32();
-        var fieldRef    = arguments.GetProperty("fieldRefName").GetString()!;
+        var slotId = arguments.GetProperty("slotId").GetString()!;
+        var org = arguments.GetProperty("organization").GetString()!;
+        var project = arguments.GetProperty("project").GetString()!;
+        var workItemId = arguments.GetProperty("workItemId").GetInt32();
+        var fieldRef = arguments.GetProperty("fieldRefName").GetString()!;
         var expectedSha = arguments.GetProperty("sha256").GetString()!.ToLowerInvariant();
 
         _logger.LogInformation(
@@ -79,7 +79,7 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
                 $"SHA-256 mismatch. expected={expectedSha} actual={actualSha}", IsError: true);
         }
 
-        var markdown     = Encoding.UTF8.GetString(rawBytes);
+        var markdown = Encoding.UTF8.GetString(rawBytes);
         var escapedValue = AdoFieldEscaper.Escape(markdown);
 
         // 3. Write the escaped content to the ADO field.
@@ -125,7 +125,7 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
 
         var response = JsonSerializer.Serialize(new
         {
-            status    = isMatch ? "MATCH" : "MISMATCH",
+            status = isMatch ? "MATCH" : "MISMATCH",
             charCount,
         });
 

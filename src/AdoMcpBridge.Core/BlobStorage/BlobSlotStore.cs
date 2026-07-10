@@ -23,7 +23,7 @@ internal sealed class BlobSlotStore : IBlobSlotStore
 
     public async Task<UploadSlot> CreateSlotAsync(CancellationToken ct = default)
     {
-        var slotId   = Guid.NewGuid().ToString("N");
+        var slotId = Guid.NewGuid().ToString("N");
         var startsOn = DateTimeOffset.UtcNow.AddMinutes(-1); // 1-min skew buffer
         var expiresOn = DateTimeOffset.UtcNow.AddMinutes(_options.SlotTtlMinutes);
 
@@ -37,17 +37,17 @@ internal sealed class BlobSlotStore : IBlobSlotStore
         var sasBuilder = new BlobSasBuilder
         {
             BlobContainerName = _options.ContainerName,
-            BlobName          = slotId,
-            Resource          = "b",
-            StartsOn          = startsOn,
-            ExpiresOn         = expiresOn,
+            BlobName = slotId,
+            Resource = "b",
+            StartsOn = startsOn,
+            ExpiresOn = expiresOn,
         };
         // Write + Create lets the client PUT a new blob without being able
         // to read, list, or delete.
         sasBuilder.SetPermissions(BlobSasPermissions.Write | BlobSasPermissions.Create);
 
         var sasParams = sasBuilder.ToSasQueryParameters(delegationKey, _service.AccountName);
-        var blobUri   = _service
+        var blobUri = _service
             .GetBlobContainerClient(_options.ContainerName)
             .GetBlobClient(slotId)
             .Uri;
@@ -60,7 +60,7 @@ internal sealed class BlobSlotStore : IBlobSlotStore
 
     public async Task<byte[]> ReadSlotAsync(string slotId, CancellationToken ct = default)
     {
-        var blob     = _service.GetBlobContainerClient(_options.ContainerName).GetBlobClient(slotId);
+        var blob = _service.GetBlobContainerClient(_options.ContainerName).GetBlobClient(slotId);
         var response = await blob.DownloadContentAsync(ct).ConfigureAwait(false);
         return response.Value.Content.ToArray();
     }

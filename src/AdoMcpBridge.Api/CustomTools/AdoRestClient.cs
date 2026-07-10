@@ -37,16 +37,16 @@ internal sealed class AdoRestClient : IAdoRestClient
 
     public AdoRestClient(HttpClient http, TokenCredential credential, ILogger<AdoRestClient> logger)
     {
-        _http       = http;
+        _http = http;
         _credential = credential;
-        _logger     = logger;
+        _logger = logger;
     }
 
     public async Task<string?> GetFieldAsync(
         string org, string project, int workItemId, string fieldRefName,
         CancellationToken ct = default)
     {
-        var url  = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
                    $"/{Uri.EscapeDataString(project)}/_apis/wit/workitems/{workItemId}" +
                    $"?fields={Uri.EscapeDataString(fieldRefName)}&api-version=7.1";
 
@@ -62,7 +62,7 @@ internal sealed class AdoRestClient : IAdoRestClient
         }
 
         var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        using var doc  = JsonDocument.Parse(json);
+        using var doc = JsonDocument.Parse(json);
         if (doc.RootElement.TryGetProperty("fields", out var fields) &&
             fields.TryGetProperty(fieldRefName, out var field))
         {

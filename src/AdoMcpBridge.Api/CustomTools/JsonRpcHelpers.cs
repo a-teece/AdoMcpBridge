@@ -23,8 +23,8 @@ internal static class JsonRpcHelpers
         var envelope = new JsonObject
         {
             ["jsonrpc"] = "2.0",
-            ["id"]      = requestId.HasValue ? JsonNode.Parse(requestId.Value.GetRawText()) : null,
-            ["result"]  = new JsonObject
+            ["id"] = requestId.HasValue ? JsonNode.Parse(requestId.Value.GetRawText()) : null,
+            ["result"] = new JsonObject
             {
                 ["content"] = content,
                 ["isError"] = result.IsError,
@@ -32,7 +32,7 @@ internal static class JsonRpcHelpers
         };
 
         response.ContentType = "application/json";
-        response.StatusCode  = 200;
+        response.StatusCode = 200;
         await response.WriteAsync(envelope.ToJsonString(_pretty), Encoding.UTF8, ct);
     }
 
@@ -42,16 +42,16 @@ internal static class JsonRpcHelpers
         var envelope = new JsonObject
         {
             ["jsonrpc"] = "2.0",
-            ["id"]      = requestId.HasValue ? JsonNode.Parse(requestId.Value.GetRawText()) : null,
-            ["error"]   = new JsonObject
+            ["id"] = requestId.HasValue ? JsonNode.Parse(requestId.Value.GetRawText()) : null,
+            ["error"] = new JsonObject
             {
-                ["code"]    = code,
+                ["code"] = code,
                 ["message"] = message,
             },
         };
 
         response.ContentType = "application/json";
-        response.StatusCode  = 200; // JSON-RPC errors are HTTP 200
+        response.StatusCode = 200; // JSON-RPC errors are HTTP 200
         await response.WriteAsync(envelope.ToJsonString(_pretty), Encoding.UTF8, ct);
     }
 
@@ -108,7 +108,7 @@ internal static class JsonRpcHelpers
     private static byte[] InjectIntoSseResponse(string text, IEnumerable<ICustomMcpTool> extraTools)
     {
         var lines = text.Split('\n');
-        var sb    = new StringBuilder();
+        var sb = new StringBuilder();
 
         foreach (var line in lines)
         {
@@ -125,7 +125,7 @@ internal static class JsonRpcHelpers
                 if (doc.RootElement.TryGetProperty("result", out var result) &&
                     result.TryGetProperty("tools", out _))
                 {
-                    var node      = JsonNode.Parse(json)!;
+                    var node = JsonNode.Parse(json)!;
                     var toolsArray = node["result"]!["tools"]!.AsArray();
                     foreach (var tool in extraTools)
                     {
@@ -147,7 +147,7 @@ internal static class JsonRpcHelpers
     private static JsonObject BuildToolDefinition(ICustomMcpTool tool) =>
         new()
         {
-            ["name"]        = tool.Name,
+            ["name"] = tool.Name,
             ["description"] = tool.Description,
             ["inputSchema"] = JsonNode.Parse(JsonSerializer.Serialize(tool.InputSchema)),
         };

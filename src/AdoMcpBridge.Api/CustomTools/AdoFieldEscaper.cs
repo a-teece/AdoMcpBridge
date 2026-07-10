@@ -55,7 +55,7 @@ internal static class AdoFieldEscaper
     public static (bool isMatch, int charCount) Verify(string originalMarkdown, string storedValue)
     {
         var normalizedOriginal = NormalizeTrailingNewlines(originalMarkdown);
-        var normalizedStored   = NormalizeTrailingNewlines(Unescape(storedValue));
+        var normalizedStored = NormalizeTrailingNewlines(Unescape(storedValue));
         return (normalizedOriginal == normalizedStored, normalizedOriginal.Length);
     }
 }

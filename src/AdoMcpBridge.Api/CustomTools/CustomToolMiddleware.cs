@@ -20,8 +20,8 @@ internal sealed class CustomToolMiddleware
         IEnumerable<ICustomMcpTool> tools,
         ILogger<CustomToolMiddleware> logger)
     {
-        _next   = next;
-        _tools  = tools.ToList();
+        _next = next;
+        _tools = tools.ToList();
         _logger = logger;
     }
 
@@ -55,16 +55,16 @@ internal sealed class CustomToolMiddleware
 
         using (doc)
         {
-            var root   = doc.RootElement;
+            var root = doc.RootElement;
             var method = root.TryGetProperty("method", out var m) ? m.GetString() : null;
-            var id     = root.TryGetProperty("id", out var idEl) ? idEl : (JsonElement?)null;
+            var id = root.TryGetProperty("id", out var idEl) ? idEl : (JsonElement?)null;
 
             if (method == "tools/call" &&
                 root.TryGetProperty("params", out var p) &&
                 p.TryGetProperty("name", out var nameEl))
             {
                 var toolName = nameEl.GetString();
-                var tool     = _tools.FirstOrDefault(t => t.Name == toolName);
+                var tool = _tools.FirstOrDefault(t => t.Name == toolName);
                 if (tool is not null)
                 {
                     var args = p.TryGetProperty("arguments", out var a) ? a : default;

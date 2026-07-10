@@ -10,11 +10,11 @@ internal sealed class CreateUploadSlotTool : ICustomMcpTool
 
     public CreateUploadSlotTool(IBlobSlotStore blobs, ILogger<CreateUploadSlotTool> logger)
     {
-        _blobs  = blobs;
+        _blobs = blobs;
         _logger = logger;
     }
 
-    public string Name        => "ado_bridge_create_upload_slot";
+    public string Name => "ado_bridge_create_upload_slot";
     public string Description =>
         "Creates a short-lived pre-signed upload slot for transferring large text content to the " +
         "bridge without routing it through the model. Returns a write-only SAS URL and a slot ID. " +
@@ -24,9 +24,9 @@ internal sealed class CreateUploadSlotTool : ICustomMcpTool
 
     public object InputSchema => new
     {
-        type       = "object",
+        type = "object",
         properties = new { },
-        required   = Array.Empty<string>(),
+        required = Array.Empty<string>(),
     };
 
     public async Task<McpToolResult> InvokeAsync(JsonElement arguments, CancellationToken ct)
@@ -46,7 +46,7 @@ internal sealed class CreateUploadSlotTool : ICustomMcpTool
 
         var result = JsonSerializer.Serialize(new
         {
-            slotId    = slot.SlotId,
+            slotId = slot.SlotId,
             uploadUrl = slot.UploadUrl.ToString(),
             expiresAt = slot.ExpiresAt.ToString("O"),
         });

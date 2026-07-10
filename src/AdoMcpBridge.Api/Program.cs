@@ -1,5 +1,3 @@
-using Azure.Core;
-using Azure.Identity;
 using AdoMcpBridge.Api.CustomTools;
 using AdoMcpBridge.Api.CustomTools.Tools;
 using AdoMcpBridge.Api.Endpoints;
@@ -13,6 +11,8 @@ using AdoMcpBridge.Core.DependencyInjection;
 using AdoMcpBridge.Core.Entra;
 using AdoMcpBridge.Core.OAuth;
 using AdoMcpBridge.Core.Time;
+using Azure.Core;
+using Azure.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddBridgeTelemetry(builder.Configuration);
