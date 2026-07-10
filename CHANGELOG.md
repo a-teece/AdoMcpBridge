@@ -6,6 +6,13 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.8](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.7...v0.1.8) (2026-07-10)
+
+
+### Features
+
+* add custom MCP tools for large ADO field read/write via blob storage ([#49](https://github.com/a-teece/AdoMcpBridge/issues/49)) ([291f2d9](https://github.com/a-teece/AdoMcpBridge/commit/291f2d94a11e4aed7141d7d35e0ace5baf73bd29))
+
 ## [0.1.7](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.6...v0.1.7) (2026-06-12)
 
 
