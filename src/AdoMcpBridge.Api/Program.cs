@@ -37,11 +37,18 @@ builder.Services.AddBlobSlotStore(builder.Configuration);
 builder.Services.AddSingleton<TokenCredential>(_ => new DefaultAzureCredential());
 builder.Services.AddHttpClient<IAdoRestClient, AdoRestClient>();
 
+// Field-type cache used by the slim work-item tools to know which fields
+// to stub — populated lazily on the first call per org, then held for the
+// process lifetime (field types change only when org admins add custom fields).
+builder.Services.AddSingleton<IWorkItemFieldTypeCache, WorkItemFieldTypeCache>();
+
 // Custom MCP tools — registered as ICustomMcpTool so the middleware can
 // resolve them all at once via IEnumerable<ICustomMcpTool>.
 builder.Services.AddSingleton<ICustomMcpTool, DownloadFieldTool>();
 builder.Services.AddSingleton<ICustomMcpTool, CreateUploadSlotTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WriteFieldFromSlotTool>();
+builder.Services.AddSingleton<ICustomMcpTool, WitGetSlimTool>();
+builder.Services.AddSingleton<ICustomMcpTool, WitGetBatchSlimTool>();
 
 builder.Services.AddMcpProxy(builder.Configuration);
 

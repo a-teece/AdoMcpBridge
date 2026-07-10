@@ -23,6 +23,30 @@ public interface IAdoRestClient
     Task PatchFieldAsync(
         string org, string project, int workItemId, string fieldRefName,
         string escapedValue, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns all fields for a single work item (expanded), or
+    /// <see langword="null"/> if the item does not exist.
+    /// The returned <see cref="JsonElement"/> is independent of any
+    /// underlying <see cref="JsonDocument"/> lifetime.
+    /// </summary>
+    Task<JsonElement?> GetWorkItemAsync(
+        string org, string project, int id, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns all fields for each of the requested work items in a single
+    /// batch call. The order of results matches the order of <paramref name="ids"/>.
+    /// </summary>
+    Task<IReadOnlyList<JsonElement>> GetWorkItemsBatchAsync(
+        string org, string project, IReadOnlyList<int> ids, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns the set of field reference names whose ADO field type is
+    /// contained in <paramref name="types"/> (e.g. <c>"html"</c>,
+    /// <c>"plainText"</c>). Comparison is case-insensitive.
+    /// </summary>
+    Task<IReadOnlySet<string>> GetFieldRefNamesByTypeAsync(
+        string org, IReadOnlySet<string> types, CancellationToken ct = default);
 }
 
 internal sealed class AdoRestClient : IAdoRestClient
@@ -101,6 +125,98 @@ internal sealed class AdoRestClient : IAdoRestClient
                 workItemId, fieldRefName, (int)res.StatusCode, err);
             res.EnsureSuccessStatusCode();
         }
+    }
+
+    public async Task<JsonElement?> GetWorkItemAsync(
+        string org, string project, int id, CancellationToken ct = default)
+    {
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
+                   $"/{Uri.EscapeDataString(project)}/_apis/wit/workitems/{id}" +
+                   $"?$expand=All&api-version=7.1";
+
+        using var req = await BuildRequestAsync(HttpMethod.Get, url, body: null, ct);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+
+        if (res.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            _logger.LogWarning("ADO GET WI {Id} returned {Status}: {Body}", id, (int)res.StatusCode, err);
+            res.EnsureSuccessStatusCode();
+        }
+
+        var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.Clone();
+    }
+
+    public async Task<IReadOnlyList<JsonElement>> GetWorkItemsBatchAsync(
+        string org, string project, IReadOnlyList<int> ids, CancellationToken ct = default)
+    {
+        if (ids.Count == 0) return [];
+
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
+                   $"/{Uri.EscapeDataString(project)}/_apis/wit/workitemsbatch?api-version=7.1";
+
+        var payload = new Dictionary<string, object> { ["ids"] = ids, ["$expand"] = "All" };
+        var body = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+        using var req = await BuildRequestAsync(HttpMethod.Post, url, body, ct);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            _logger.LogWarning("ADO WI batch returned {Status}: {Body}", (int)res.StatusCode, err);
+            res.EnsureSuccessStatusCode();
+        }
+
+        var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+
+        var result = new List<JsonElement>();
+        if (doc.RootElement.TryGetProperty("value", out var values))
+            foreach (var item in values.EnumerateArray())
+                result.Add(item.Clone());
+
+        return result;
+    }
+
+    public async Task<IReadOnlySet<string>> GetFieldRefNamesByTypeAsync(
+        string org, IReadOnlySet<string> types, CancellationToken ct = default)
+    {
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}/_apis/wit/fields?api-version=7.1";
+
+        using var req = await BuildRequestAsync(HttpMethod.Get, url, body: null, ct);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            _logger.LogWarning("ADO GET fields for {Org} returned {Status}: {Body}", org, (int)res.StatusCode, err);
+            res.EnsureSuccessStatusCode();
+        }
+
+        var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (doc.RootElement.TryGetProperty("value", out var fields))
+        {
+            foreach (var field in fields.EnumerateArray())
+            {
+                if (field.TryGetProperty("type", out var typeEl) &&
+                    field.TryGetProperty("referenceName", out var refNameEl))
+                {
+                    var type = typeEl.GetString();
+                    var refName = refNameEl.GetString();
+                    if (type is not null && refName is not null && types.Contains(type))
+                        result.Add(refName);
+                }
+            }
+        }
+        return result;
     }
 
     private async Task<HttpRequestMessage> BuildRequestAsync(
