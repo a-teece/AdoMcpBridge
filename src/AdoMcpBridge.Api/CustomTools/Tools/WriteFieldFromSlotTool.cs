@@ -25,7 +25,8 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
         "Write operations: Transfers content from a previously created upload slot into an Azure DevOps " +
         "work-item long-text field. The bridge verifies the SHA-256 hash, writes the field, and re-fetches it. " +
         "format=html (default): sends HTML as-is; returns {\"status\":\"WRITTEN\",\"charCount\":N}. " +
-        "format=markdown: sends markdown as-is and declares native Markdown storage via /multilineFieldsFormat; " +
+        "format=markdown: entity-escapes content to survive ADO's ingest sanitiser (WI #95818, strips bare " +
+        "<tag> sequences even in markdown mode), declares native Markdown storage via /multilineFieldsFormat, " +
         "verifies the round-trip and returns {\"status\":\"MATCH\",\"charCount\":N}. " +
         "WARNING: once a field is set to Markdown it cannot be reverted to HTML. " +
         "The sha256 must be the lowercase hex SHA-256 of the raw UTF-8 bytes of the uploaded file.";
@@ -41,7 +42,7 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
             workItemId = new { type = "integer", description = "Work-item numeric id." },
             fieldRefName = new { type = "string", description = "Field reference name (e.g. System.Description)." },
             sha256 = new { type = "string", description = "Lowercase hex SHA-256 of the raw UTF-8 bytes of the uploaded content." },
-            format = new { type = "string", @enum = new[] { "html", "markdown" }, description = "Content format. 'html' (default): HTML sent as-is. 'markdown': markdown sent as-is with native Markdown storage declared — WARNING: irreversible per field." },
+            format = new { type = "string", @enum = new[] { "html", "markdown" }, description = "Content format. 'html' (default): HTML sent as-is. 'markdown': entity-escaped (ADO sanitiser strips bare <tag> even in markdown mode) then written with native Markdown storage declared — WARNING: irreversible per field." },
         },
         required = new[] { "slotId", "organization", "project", "workItemId", "fieldRefName", "sha256" },
     };
@@ -85,6 +86,10 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
         }
 
         var content = Encoding.UTF8.GetString(rawBytes);
+        // Entity-escape markdown to survive ADO's ingest sanitiser, which strips bare <tag> sequences
+        // even in native markdown-mode fields (same bug as WI #95818 on HTML fields).
+        // HTML is sent as-is — the caller is responsible for valid HTML.
+        var writeValue = isMarkdown ? AdoFieldEscaper.Escape(content) : content;
 
         // 3. Write the content to the ADO field.
         // For markdown: declare native Markdown storage via /multilineFieldsFormat (irreversible).
@@ -92,7 +97,7 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
         try
         {
             await _ado.PatchFieldAsync(
-                    org, project, workItemId, fieldRef, content,
+                    org, project, workItemId, fieldRef, writeValue,
                     fieldFormat: isMarkdown ? "Markdown" : null, ct)
                   .ConfigureAwait(false);
         }
@@ -134,17 +139,16 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
             return new McpToolResult(JsonSerializer.Serialize(new { status = "WRITTEN", charCount }));
         }
 
-        // Markdown round-trip: ADO stores markdown as-is, so compare without entity transforms.
-        var normalizedOriginal = AdoFieldEscaper.NormalizeTrailingNewlines(content);
-        var normalizedStored = AdoFieldEscaper.NormalizeTrailingNewlines(storedValue ?? string.Empty);
-        var isMatch = normalizedOriginal == normalizedStored;
+        // Markdown round-trip: we entity-escaped before writing, so Verify applies Unescape to
+        // reverse both our escaping and ADO's own independent quote encoding before comparing.
+        var (isMatch, mdCharCount) = AdoFieldEscaper.Verify(content, storedValue ?? string.Empty);
 
         _logger.LogInformation(
             "ado_bridge_write_field_from_slot: WI {Id} field {Field} status={Status} chars={Chars}",
-            workItemId, fieldRef, isMatch ? "MATCH" : "MISMATCH", normalizedOriginal.Length);
+            workItemId, fieldRef, isMatch ? "MATCH" : "MISMATCH", mdCharCount);
 
         return new McpToolResult(
-            JsonSerializer.Serialize(new { status = isMatch ? "MATCH" : "MISMATCH", charCount = normalizedOriginal.Length }),
+            JsonSerializer.Serialize(new { status = isMatch ? "MATCH" : "MISMATCH", charCount = mdCharCount }),
             IsError: !isMatch);
     }
 }
