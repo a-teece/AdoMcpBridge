@@ -117,18 +117,20 @@ public class WriteFieldFromSlotToolTests
     // ── markdown format ───────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Markdown_SendsContentWithoutEntityEscapingAndDeclaresMarkdownFormat()
+    public async Task Markdown_EntityEscapesContentAndDeclaresMarkdownFormat()
     {
-        const string md = "# Title\n\n**bold** and `code`";
+        // ADO's sanitiser strips bare <tag> sequences even in markdown-mode fields (WI #95818).
+        // The bridge must entity-escape before writing.
+        const string md = "# Title\n\n`List<T>` and `x < y`";
         _blobs.ReadSlotAsync("slot-1", Arg.Any<CancellationToken>()).Returns(Utf8(md));
         _ado.GetFieldAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(md);
+            .Returns(AdoFieldEscaper.Escape(md));
 
         await CreateTool().InvokeAsync(Args(content: md, format: "markdown"), CancellationToken.None);
 
         await _ado.Received(1).PatchFieldAsync(
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(),
-            md,
+            AdoFieldEscaper.Escape(md),   // entity-escaped, not raw
             fieldFormat: "Markdown",
             Arg.Any<CancellationToken>());
     }
@@ -138,8 +140,9 @@ public class WriteFieldFromSlotToolTests
     {
         const string md = "Plain markdown content.";
         _blobs.ReadSlotAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Utf8(md));
+        // Simulate ADO returning the entity-escaped value (no further encoding on plain text).
         _ado.GetFieldAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(md);
+            .Returns(AdoFieldEscaper.Escape(md));
 
         var result = await CreateTool().InvokeAsync(Args(content: md, format: "markdown"), CancellationToken.None);
 
@@ -155,7 +158,7 @@ public class WriteFieldFromSlotToolTests
         const string md = "some content";
         _blobs.ReadSlotAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Utf8(md));
         _ado.GetFieldAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(md + "\n\n");
+            .Returns(AdoFieldEscaper.Escape(md) + "\n\n");
 
         var result = await CreateTool().InvokeAsync(Args(content: md, format: "markdown"), CancellationToken.None);
 
