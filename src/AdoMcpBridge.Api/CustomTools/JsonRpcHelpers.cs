@@ -144,11 +144,16 @@ internal static class JsonRpcHelpers
         return Encoding.UTF8.GetBytes(sb.ToString());
     }
 
-    private static JsonObject BuildToolDefinition(ICustomMcpTool tool) =>
-        new()
+    private static JsonObject BuildToolDefinition(ICustomMcpTool tool)
+    {
+        var obj = new JsonObject
         {
             ["name"] = tool.Name,
             ["description"] = tool.Description,
             ["inputSchema"] = JsonNode.Parse(JsonSerializer.Serialize(tool.InputSchema)),
         };
+        if (tool.Annotations is not null)
+            obj["annotations"] = JsonNode.Parse(JsonSerializer.Serialize(tool.Annotations));
+        return obj;
+    }
 }

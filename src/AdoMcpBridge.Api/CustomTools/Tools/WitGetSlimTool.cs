@@ -18,10 +18,11 @@ internal sealed class WitGetSlimTool : ICustomMcpTool
     }
 
     public string Name => "ado_bridge_wit_get";
+    public object? Annotations => new { readOnlyHint = true };
 
     public string Description =>
-        "Gets an Azure DevOps work item with all long-text fields (HTML descriptions, repro steps, " +
-        "acceptance criteria, etc.) replaced by compact stub markers showing only the character count. " +
+        "Read operations: Gets an Azure DevOps work item with all long-text fields (HTML descriptions, " +
+        "repro steps, acceptance criteria, etc.) replaced by compact stub markers showing only the character count. " +
         "Use ado_bridge_download_field to fetch the full content of any stubbed field. " +
         "All other fields (title, state, type, priority, dates, tags, relations, etc.) are returned in full.";
 

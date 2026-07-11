@@ -20,9 +20,10 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
     }
 
     public string Name => "ado_bridge_write_field_from_slot";
+    public object? Annotations => new { readOnlyHint = false };
     public string Description =>
-        "Transfers content from a previously created upload slot into an Azure DevOps work-item " +
-        "long-text field. The bridge verifies the SHA-256 hash of the uploaded content, " +
+        "Write operations: Transfers content from a previously created upload slot into an Azure DevOps " +
+        "work-item long-text field. The bridge verifies the SHA-256 hash of the uploaded content, " +
         "applies the ADO entity-escaping required to survive the ADO ingest sanitiser (WI #95818), " +
         "writes the field, re-fetches it, and verifies the round-trip. " +
         "Returns {\"status\":\"MATCH\",\"charCount\":N} on success. " +
