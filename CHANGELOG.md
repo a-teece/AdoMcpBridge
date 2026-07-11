@@ -6,6 +6,13 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.10](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.9...v0.1.10) (2026-07-11)
+
+
+### Features
+
+* add MCP readOnlyHint annotations to all bridge custom tools ([#53](https://github.com/a-teece/AdoMcpBridge/issues/53)) ([b673bb4](https://github.com/a-teece/AdoMcpBridge/commit/b673bb4859954120435ef8a83ef53a6f9d47c034))
+
 ## [0.1.9](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.8...v0.1.9) (2026-07-10)
 
 
