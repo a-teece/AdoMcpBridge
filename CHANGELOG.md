@@ -6,6 +6,13 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.11](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.10...v0.1.11) (2026-07-11)
+
+
+### Features
+
+* add format parameter to ado_bridge_write_field_from_slot ([427eb02](https://github.com/a-teece/AdoMcpBridge/commit/427eb02b188950e918933ce3b3dcbd7f00438554))
+
 ## [0.1.10](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.9...v0.1.10) (2026-07-11)
 
 
