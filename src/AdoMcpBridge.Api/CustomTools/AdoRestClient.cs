@@ -17,12 +17,14 @@ public interface IAdoRestClient
 
     /// <summary>
     /// Replaces the entire content of a work-item long-text field.
-    /// The caller is responsible for any required entity-escaping before
-    /// passing <paramref name="escapedValue"/>.
+    /// Pass <paramref name="fieldFormat"/> as <c>"Markdown"</c> to declare
+    /// native markdown storage (adds a <c>/multilineFieldsFormat</c> operation).
+    /// Omit (or pass <see langword="null"/>) for HTML (the ADO default).
+    /// WARNING: once a field is set to Markdown it cannot be reverted to HTML.
     /// </summary>
     Task PatchFieldAsync(
         string org, string project, int workItemId, string fieldRefName,
-        string escapedValue, CancellationToken ct = default);
+        string value, string? fieldFormat = null, CancellationToken ct = default);
 
     /// <summary>
     /// Returns all fields for a single work item (expanded), or
@@ -98,18 +100,21 @@ internal sealed class AdoRestClient : IAdoRestClient
 
     public async Task PatchFieldAsync(
         string org, string project, int workItemId, string fieldRefName,
-        string escapedValue, CancellationToken ct = default)
+        string value, string? fieldFormat = null, CancellationToken ct = default)
     {
         var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
                   $"/{Uri.EscapeDataString(project)}/_apis/wit/workitems/{workItemId}" +
                   $"?api-version=7.1";
 
-        // JSON-Patch body — the serializer handles JSON wire escaping; the
-        // entity-escaping of the markdown content is the caller's responsibility.
-        var patch = JsonSerializer.Serialize(new[]
+        var ops = new List<object>
         {
-            new { op = "replace", path = $"/fields/{fieldRefName}", value = escapedValue }
-        });
+            new { op = "add", path = $"/fields/{fieldRefName}", value = (object)value },
+        };
+
+        if (fieldFormat is not null)
+            ops.Add(new { op = "add", path = $"/multilineFieldsFormat/{fieldRefName}", value = (object)fieldFormat });
+
+        var patch = JsonSerializer.Serialize(ops);
 
         using var req = await BuildRequestAsync(
             HttpMethod.Patch, url,

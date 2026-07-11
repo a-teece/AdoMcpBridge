@@ -23,11 +23,12 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
     public object? Annotations => new { readOnlyHint = false };
     public string Description =>
         "Write operations: Transfers content from a previously created upload slot into an Azure DevOps " +
-        "work-item long-text field. The bridge verifies the SHA-256 hash of the uploaded content, " +
-        "applies the ADO entity-escaping required to survive the ADO ingest sanitiser (WI #95818), " +
-        "writes the field, re-fetches it, and verifies the round-trip. " +
-        "Returns {\"status\":\"MATCH\",\"charCount\":N} on success. " +
-        "The sha256 must be the lowercase hex SHA-256 of the raw UTF-8 bytes of the markdown file.";
+        "work-item long-text field. The bridge verifies the SHA-256 hash, writes the field, and re-fetches it. " +
+        "format=html (default): sends HTML as-is; returns {\"status\":\"WRITTEN\",\"charCount\":N}. " +
+        "format=markdown: sends markdown as-is and declares native Markdown storage via /multilineFieldsFormat; " +
+        "verifies the round-trip and returns {\"status\":\"MATCH\",\"charCount\":N}. " +
+        "WARNING: once a field is set to Markdown it cannot be reverted to HTML. " +
+        "The sha256 must be the lowercase hex SHA-256 of the raw UTF-8 bytes of the uploaded file.";
 
     public object InputSchema => new
     {
@@ -39,7 +40,8 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
             project = new { type = "string", description = "ADO project name." },
             workItemId = new { type = "integer", description = "Work-item numeric id." },
             fieldRefName = new { type = "string", description = "Field reference name (e.g. System.Description)." },
-            sha256 = new { type = "string", description = "Lowercase hex SHA-256 of the uploaded markdown bytes." },
+            sha256 = new { type = "string", description = "Lowercase hex SHA-256 of the raw UTF-8 bytes of the uploaded content." },
+            format = new { type = "string", @enum = new[] { "html", "markdown" }, description = "Content format. 'html' (default): HTML sent as-is. 'markdown': markdown sent as-is with native Markdown storage declared — WARNING: irreversible per field." },
         },
         required = new[] { "slotId", "organization", "project", "workItemId", "fieldRefName", "sha256" },
     };
@@ -52,10 +54,12 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
         var workItemId = arguments.GetProperty("workItemId").GetInt32();
         var fieldRef = arguments.GetProperty("fieldRefName").GetString()!;
         var expectedSha = arguments.GetProperty("sha256").GetString()!.ToLowerInvariant();
+        var isMarkdown = arguments.TryGetProperty("format", out var fmtEl) &&
+                         string.Equals(fmtEl.GetString(), "markdown", StringComparison.OrdinalIgnoreCase);
 
         _logger.LogInformation(
-            "ado_bridge_write_field_from_slot: WI {Id} field {Field} slot {Slot}",
-            workItemId, fieldRef, slotId);
+            "ado_bridge_write_field_from_slot: WI {Id} field {Field} slot {Slot} format={Format}",
+            workItemId, fieldRef, slotId, isMarkdown ? "markdown" : "html");
 
         // 1. Download the uploaded content.
         byte[] rawBytes;
@@ -80,21 +84,24 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
                 $"SHA-256 mismatch. expected={expectedSha} actual={actualSha}", IsError: true);
         }
 
-        var markdown = Encoding.UTF8.GetString(rawBytes);
-        var escapedValue = AdoFieldEscaper.Escape(markdown);
+        var content = Encoding.UTF8.GetString(rawBytes);
 
-        // 3. Write the escaped content to the ADO field.
+        // 3. Write the content to the ADO field.
+        // For markdown: declare native Markdown storage via /multilineFieldsFormat (irreversible).
+        // For html: no format declaration needed — HTML is ADO's default.
         try
         {
-            await _ado.PatchFieldAsync(org, project, workItemId, fieldRef, escapedValue, ct)
-                      .ConfigureAwait(false);
+            await _ado.PatchFieldAsync(
+                    org, project, workItemId, fieldRef, content,
+                    fieldFormat: isMarkdown ? "Markdown" : null, ct)
+                  .ConfigureAwait(false);
         }
         catch (HttpRequestException ex)
         {
             return new McpToolResult($"ADO PATCH failed: {ex.Message}", IsError: true);
         }
 
-        // 4. Re-fetch and verify round-trip.
+        // 4. Re-fetch to confirm the write succeeded.
         string? storedValue;
         try
         {
@@ -118,18 +125,26 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
             _logger.LogWarning(ex, "Failed to delete slot {SlotId} after write", slotId);
         }
 
-        var (isMatch, charCount) = AdoFieldEscaper.Verify(markdown, storedValue ?? string.Empty);
+        if (!isMarkdown)
+        {
+            var charCount = AdoFieldEscaper.NormalizeTrailingNewlines(content).Length;
+            _logger.LogInformation(
+                "ado_bridge_write_field_from_slot: WI {Id} field {Field} status=WRITTEN chars={Chars}",
+                workItemId, fieldRef, charCount);
+            return new McpToolResult(JsonSerializer.Serialize(new { status = "WRITTEN", charCount }));
+        }
+
+        // Markdown round-trip: ADO stores markdown as-is, so compare without entity transforms.
+        var normalizedOriginal = AdoFieldEscaper.NormalizeTrailingNewlines(content);
+        var normalizedStored = AdoFieldEscaper.NormalizeTrailingNewlines(storedValue ?? string.Empty);
+        var isMatch = normalizedOriginal == normalizedStored;
 
         _logger.LogInformation(
             "ado_bridge_write_field_from_slot: WI {Id} field {Field} status={Status} chars={Chars}",
-            workItemId, fieldRef, isMatch ? "MATCH" : "MISMATCH", charCount);
+            workItemId, fieldRef, isMatch ? "MATCH" : "MISMATCH", normalizedOriginal.Length);
 
-        var response = JsonSerializer.Serialize(new
-        {
-            status = isMatch ? "MATCH" : "MISMATCH",
-            charCount,
-        });
-
-        return new McpToolResult(response, IsError: !isMatch);
+        return new McpToolResult(
+            JsonSerializer.Serialize(new { status = isMatch ? "MATCH" : "MISMATCH", charCount = normalizedOriginal.Length }),
+            IsError: !isMatch);
     }
 }
