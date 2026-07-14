@@ -50,7 +50,7 @@ public sealed class EntraTokenClient : IEntraTokenClient
             ["redirect_uri"] = redirectUri,
             ["code_verifier"] = codeVerifier,
         };
-        return RequestTokenAsync(form, EntraAuthFailure.AuthorizationCodeRejected, ct);
+        return RequestTokenAsync(form, EntraAuthFailure.AuthorizationCodeRejected, _options.Scopes, ct);
     }
 
     public ValueTask<EntraTokenResult> AcquireAdoTokenAsync(string entraRefreshToken, CancellationToken ct)
@@ -60,17 +60,28 @@ public sealed class EntraTokenClient : IEntraTokenClient
             ["grant_type"] = "refresh_token",
             ["refresh_token"] = entraRefreshToken,
         };
-        return RequestTokenAsync(form, EntraAuthFailure.RefreshRejected, ct);
+        return RequestTokenAsync(form, EntraAuthFailure.RefreshRejected, _options.Scopes, ct);
+    }
+
+    public ValueTask<EntraTokenResult> AcquireAdoRestTokenAsync(string entraRefreshToken, CancellationToken ct)
+    {
+        var form = new Dictionary<string, string>
+        {
+            ["grant_type"] = "refresh_token",
+            ["refresh_token"] = entraRefreshToken,
+        };
+        return RequestTokenAsync(form, EntraAuthFailure.RefreshRejected, _options.AdoRestScopes, ct);
     }
 
     private async ValueTask<EntraTokenResult> RequestTokenAsync(
-        Dictionary<string, string> form, EntraAuthFailure rejectionFailure, CancellationToken ct)
+        Dictionary<string, string> form, EntraAuthFailure rejectionFailure,
+        IEnumerable<string> scopes, CancellationToken ct)
     {
         var tokenEndpoint = TokenEndpoint();
         var cert = await _certs.GetCertificateAsync(ct).ConfigureAwait(false);
 
         form["client_id"] = _options.ClientId;
-        form["scope"] = string.Join(' ', _options.Scopes);
+        form["scope"] = string.Join(' ', scopes);
         form["client_assertion_type"] = ClientAssertionType;
         form["client_assertion"] = BuildClientAssertion(cert, tokenEndpoint);
 

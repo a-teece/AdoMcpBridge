@@ -1,3 +1,5 @@
+using AdoMcpBridge.Api.Proxy;
+
 namespace AdoMcpBridge.Api.CustomTools;
 
 /// <summary>
@@ -16,14 +18,15 @@ internal interface IAdoAccessTokenProvider
 }
 
 /// <summary>
-/// Reads the caller's ADO access token from the current request's
-/// <c>Authorization</c> header. By the time a native tool invokes the REST
-/// client, <c>EntraTokenSwapMiddleware</c> has already swapped the incoming
-/// wrapper token for an ADO-scoped delegated token and written it back onto the
-/// request header, so this provider simply passes that token straight through —
-/// every ADO call is attributed to the real end user and honours their own ADO
-/// permissions. (The bridge managed identity therefore no longer needs to be a
-/// member of the ADO organisation for this code path.)
+/// Reads the caller's ADO-REST-scoped delegated token that
+/// <c>CustomToolMiddleware</c> stashed on
+/// <c>HttpContext.Items[AdoRestAccessToken]</c> before invoking the tool. That
+/// middleware performs a dedicated OBO/refresh-token swap for the classic Azure
+/// DevOps REST resource — separate from the MCP-server token on the request's
+/// Authorization header, which the classic REST API rejects — so the token this
+/// provider returns is audienced correctly for <c>https://dev.azure.com</c> and
+/// every ADO call is attributed to (and permission-scoped to) the real end user,
+/// not the bridge's managed identity.
 /// </summary>
 /// <remarks>
 /// Registered as a singleton. This is safe despite reading per-request state
@@ -33,8 +36,6 @@ internal interface IAdoAccessTokenProvider
 /// </remarks>
 internal sealed class HttpContextAdoAccessTokenProvider : IAdoAccessTokenProvider
 {
-    private const string BearerPrefix = "Bearer ";
-
     private readonly IHttpContextAccessor _httpContextAccessor;
 
     public HttpContextAdoAccessTokenProvider(IHttpContextAccessor httpContextAccessor)
@@ -47,20 +48,15 @@ internal sealed class HttpContextAdoAccessTokenProvider : IAdoAccessTokenProvide
                 "No active HttpContext; the ADO access token can only be sourced " +
                 "from within the request pipeline.");
 
-        var header = context.Request.Headers.Authorization.ToString();
-        if (string.IsNullOrEmpty(header) ||
-            !header.StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase))
+        // CustomToolMiddleware always populates this item (via its ADO-REST OBO
+        // swap) before invoking any native tool, so a missing/empty value here is
+        // an unreachable wiring bug, not a runtime condition to swallow silently.
+        if (context.Items[HttpContextItemKeys.AdoRestAccessToken] is not string token ||
+            token.Length == 0)
         {
             throw new InvalidOperationException(
-                "Request has no Bearer Authorization header; EntraTokenSwapMiddleware " +
-                "must run before any native tool call.");
-        }
-
-        var token = header[BearerPrefix.Length..].Trim();
-        if (token.Length == 0)
-        {
-            throw new InvalidOperationException(
-                "Authorization header carried an empty Bearer token.");
+                "No ADO REST access token on HttpContext; CustomToolMiddleware must " +
+                "run and complete its ADO token swap before any native tool call.");
         }
 
         return token;

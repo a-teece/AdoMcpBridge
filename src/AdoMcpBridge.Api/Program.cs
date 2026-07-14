@@ -31,13 +31,15 @@ builder.Services.AddRazorPages();
 builder.Services.AddBlobSlotStore(builder.Configuration);
 
 // ADO REST client authenticated with the caller's own delegated ADO token.
-// EntraTokenSwapMiddleware has already swapped the incoming wrapper token for an
-// ADO-scoped delegated token and written it onto the request Authorization header
-// by the time a native tool runs; HttpContextAdoAccessTokenProvider reads it back
-// off HttpContext so every ADO call is attributed to — and permission-scoped to —
-// the real end user, not the bridge's identity. (The bridge managed identity no
-// longer needs ADO-organisation membership for this path; removing that grant is a
-// separate infra follow-up.)
+// CustomToolMiddleware performs a dedicated OBO/refresh-token swap for the classic
+// Azure DevOps REST resource (Entra AdoRestScopes) before invoking a native tool
+// and stashes the result on HttpContext.Items; HttpContextAdoAccessTokenProvider
+// reads it back so every ADO call is attributed to — and permission-scoped to —
+// the real end user, not the bridge's identity. This is a separate token from the
+// MCP-server token EntraTokenSwapMiddleware puts on the Authorization header,
+// because the classic REST API rejects the MCP-audience token. (The bridge managed
+// identity no longer needs ADO-organisation membership for this path; removing that
+// grant is a separate infra follow-up.)
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<IAdoAccessTokenProvider, HttpContextAdoAccessTokenProvider>();
 builder.Services.AddHttpClient<IAdoRestClient, AdoRestClient>();

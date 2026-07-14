@@ -1,4 +1,5 @@
 using AdoMcpBridge.Api.CustomTools;
+using AdoMcpBridge.Api.Proxy;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 
@@ -10,10 +11,10 @@ public class HttpContextAdoAccessTokenProviderTests
         => new(new HttpContextAccessor { HttpContext = context });
 
     [Fact]
-    public void Extracts_bearer_token_from_authorization_header()
+    public void Returns_the_ado_rest_token_stashed_on_http_context_items()
     {
         var context = new DefaultHttpContext();
-        context.Request.Headers.Authorization = "Bearer caller-delegated-token";
+        context.Items[HttpContextItemKeys.AdoRestAccessToken] = "caller-delegated-token";
 
         var provider = Create(context);
 
@@ -31,7 +32,7 @@ public class HttpContextAdoAccessTokenProviderTests
     }
 
     [Fact]
-    public void Throws_when_authorization_header_is_missing()
+    public void Throws_when_ado_rest_token_item_is_missing()
     {
         var provider = Create(new DefaultHttpContext());
 
@@ -41,10 +42,10 @@ public class HttpContextAdoAccessTokenProviderTests
     }
 
     [Fact]
-    public void Throws_when_authorization_header_is_not_a_bearer_scheme()
+    public void Throws_when_ado_rest_token_item_is_empty()
     {
         var context = new DefaultHttpContext();
-        context.Request.Headers.Authorization = "Basic dXNlcjpwYXNz";
+        context.Items[HttpContextItemKeys.AdoRestAccessToken] = string.Empty;
 
         var provider = Create(context);
 
