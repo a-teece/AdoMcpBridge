@@ -6,6 +6,13 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.13](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.12...v0.1.13) (2026-07-14)
+
+
+### Bug Fixes
+
+* native ADO tools authenticate as the delegated end user ([e7111a0](https://github.com/a-teece/AdoMcpBridge/commit/e7111a07ed39817dbf0d2f56a7648c761b4040d1))
+
 ## [0.1.12](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.11...v0.1.12) (2026-07-11)
 
 
