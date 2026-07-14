@@ -1,7 +1,6 @@
 using AdoMcpBridge.Api.CustomTools;
 using AdoMcpBridge.Core.Abstractions;
 using AdoMcpBridge.Core.BlobStorage;
-using Azure.Core;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -21,7 +20,6 @@ public sealed class ProxyTestFixture : WebApplicationFactory<Program>, IAsyncDis
     public IClock Clock { get; } = new TestClock { UtcNow = new DateTimeOffset(2026, 6, 9, 12, 0, 0, TimeSpan.Zero) };
     public IBlobSlotStore BlobSlotStore { get; } = Substitute.For<IBlobSlotStore>();
     public IAdoRestClient AdoRestClient { get; } = Substitute.For<IAdoRestClient>();
-    public TokenCredential TokenCredential { get; } = Substitute.For<TokenCredential>();
 
     public sealed class TestClock : IClock { public DateTimeOffset UtcNow { get; set; } }
 
@@ -50,7 +48,6 @@ public sealed class ProxyTestFixture : WebApplicationFactory<Program>, IAsyncDis
             services.RemoveAll<ITokenStore>();
             services.RemoveAll<IClock>();
             services.RemoveAll<AdoMcpBridge.Core.OAuth.IAuthorizationSessionCache>();
-            services.RemoveAll<TokenCredential>();
             services.RemoveAll<IBlobSlotStore>();
             services.RemoveAll<IAdoRestClient>();
             services.AddSingleton(EntraClient);
@@ -59,7 +56,6 @@ public sealed class ProxyTestFixture : WebApplicationFactory<Program>, IAsyncDis
             services.AddSingleton(Clock);
             services.AddSingleton<AdoMcpBridge.Core.OAuth.IAuthorizationSessionCache>(
                 new AdoMcpBridge.Core.OAuth.InMemoryAuthorizationSessionCache(Clock));
-            services.AddSingleton(TokenCredential);
             services.AddSingleton(BlobSlotStore);
             services.AddSingleton(AdoRestClient);
         });

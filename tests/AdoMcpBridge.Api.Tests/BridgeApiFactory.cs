@@ -2,7 +2,6 @@ using AdoMcpBridge.Api.CustomTools;
 using AdoMcpBridge.Core.Abstractions;
 using AdoMcpBridge.Core.BlobStorage;
 using AdoMcpBridge.Core.Tests;
-using Azure.Core;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -20,7 +19,6 @@ public class BridgeApiFactory : WebApplicationFactory<Program>
     public InMemoryTokenStore Store { get; } = new();
     public IBlobSlotStore BlobSlotStore { get; } = Substitute.For<IBlobSlotStore>();
     public IAdoRestClient AdoRestClient { get; } = Substitute.For<IAdoRestClient>();
-    public TokenCredential TokenCredential { get; } = Substitute.For<TokenCredential>();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -48,7 +46,6 @@ public class BridgeApiFactory : WebApplicationFactory<Program>
             s.RemoveAll<IClock>();
             s.RemoveAll<ITokenStore>();
             s.RemoveAll<AdoMcpBridge.Core.OAuth.IAuthorizationSessionCache>();
-            s.RemoveAll<TokenCredential>();
             s.RemoveAll<IBlobSlotStore>();
             s.RemoveAll<IAdoRestClient>();
             s.AddSingleton(EntraClient);
@@ -57,7 +54,6 @@ public class BridgeApiFactory : WebApplicationFactory<Program>
             s.AddSingleton<ITokenStore>(Store);
             s.AddSingleton<AdoMcpBridge.Core.OAuth.IAuthorizationSessionCache>(
                 new AdoMcpBridge.Core.OAuth.InMemoryAuthorizationSessionCache(Clock));
-            s.AddSingleton(TokenCredential);
             s.AddSingleton(BlobSlotStore);
             s.AddSingleton(AdoRestClient);
 

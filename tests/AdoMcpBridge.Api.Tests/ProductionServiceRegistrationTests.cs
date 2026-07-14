@@ -4,7 +4,6 @@ using AdoMcpBridge.Core.BlobStorage;
 using AdoMcpBridge.Core.Data;
 using AdoMcpBridge.Core.Entra;
 using AdoMcpBridge.Core.KeyVault;
-using Azure.Core;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -53,7 +52,9 @@ public class ProductionServiceRegistrationTests
             d.ServiceType == typeof(Core.OAuth.IAuthorizationSessionCache)
             && d.ImplementationType == typeof(EfAuthorizationSessionCache));
         Assert.Contains(captured, d => d.ServiceType == typeof(IBlobSlotStore));
-        Assert.Contains(captured, d => d.ServiceType == typeof(TokenCredential));
+        Assert.Contains(captured, d =>
+            d.ServiceType == typeof(IAdoAccessTokenProvider)
+            && d.ImplementationType == typeof(HttpContextAdoAccessTokenProvider));
         Assert.Contains(captured, d => d.ServiceType == typeof(IAdoRestClient));
     }
 }
