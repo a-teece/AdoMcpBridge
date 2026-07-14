@@ -20,8 +20,17 @@ public sealed class EntraTokenClientTests
         Authority = wm.Authority,
         Scopes = new List<string>
         {
-            "499b84ac-1321-427f-aa17-267ca6975798/user_impersonation",
+            "openid",
+            "profile",
             "offline_access",
+            "https://mcp.dev.azure.com/Ado.Mcp.Tools",
+        },
+        AdoRestScopes = new List<string>
+        {
+            "openid",
+            "profile",
+            "offline_access",
+            "499b84ac-1321-427f-aa17-267ca6975798/user_impersonation",
         },
     };
 
@@ -94,6 +103,37 @@ public sealed class EntraTokenClientTests
         result.AccessToken.Should().Be("fresh-ado-access-token");
         result.RefreshToken.Should().Be("rotated-entra-refresh-token");
         result.UserObjectId.Should().Be("user-oid-456");
+    }
+
+    [Fact]
+    [Trait("category", "security")]
+    public async Task AcquireAdoRestTokenAsync_requests_the_ado_rest_scope_not_the_mcp_scope()
+    {
+        await using var wm = WireMockEntra.Start();
+        var opts = OptionsFor(wm);
+        wm.StubTokenEndpoint(200, new
+        {
+            token_type = "Bearer",
+            expires_in = 3600,
+            access_token = "ado-rest-access-token",
+            refresh_token = "rotated-entra-refresh-token",
+            id_token = wm.IssueIdToken(oid: "user-oid-789", upn: "carol@example.com"),
+        });
+
+        var sut = NewClient(opts);
+
+        var result = await sut.AcquireAdoRestTokenAsync("stored-entra-refresh-token", CancellationToken.None);
+
+        result.AccessToken.Should().Be("ado-rest-access-token");
+
+        // The native ADO REST tools must obtain a token audienced for the classic
+        // Azure DevOps REST resource (499b84ac.../user_impersonation), NOT the
+        // Remote-MCP-server resource that EntraOptions.Scopes targets — the two
+        // resources reject each other's tokens.
+        var sentScope = wm.LastFormValue("scope");
+        sentScope.Should().Be(string.Join(' ', opts.AdoRestScopes));
+        sentScope.Should().NotBe(string.Join(' ', opts.Scopes));
+        sentScope.Should().Contain("499b84ac-1321-427f-aa17-267ca6975798/user_impersonation");
     }
 
     [Fact]

@@ -11,8 +11,6 @@ using AdoMcpBridge.Core.DependencyInjection;
 using AdoMcpBridge.Core.Entra;
 using AdoMcpBridge.Core.OAuth;
 using AdoMcpBridge.Core.Time;
-using Azure.Core;
-using Azure.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddBridgeTelemetry(builder.Configuration);
@@ -32,9 +30,18 @@ builder.Services.AddRazorPages();
 // Blob storage for upload slots (large field write path, ADR-0003).
 builder.Services.AddBlobSlotStore(builder.Configuration);
 
-// ADO REST client authenticated via managed identity.
-// The MI must be a member of the ADO organisation with work-item edit rights.
-builder.Services.AddSingleton<TokenCredential>(_ => new DefaultAzureCredential());
+// ADO REST client authenticated with the caller's own delegated ADO token.
+// CustomToolMiddleware performs a dedicated OBO/refresh-token swap for the classic
+// Azure DevOps REST resource (Entra AdoRestScopes) before invoking a native tool
+// and stashes the result on HttpContext.Items; HttpContextAdoAccessTokenProvider
+// reads it back so every ADO call is attributed to — and permission-scoped to —
+// the real end user, not the bridge's identity. This is a separate token from the
+// MCP-server token EntraTokenSwapMiddleware puts on the Authorization header,
+// because the classic REST API rejects the MCP-audience token. (The bridge managed
+// identity no longer needs ADO-organisation membership for this path; removing that
+// grant is a separate infra follow-up.)
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<IAdoAccessTokenProvider, HttpContextAdoAccessTokenProvider>();
 builder.Services.AddHttpClient<IAdoRestClient, AdoRestClient>();
 
 // Field-type cache used by the slim work-item tools to know which fields

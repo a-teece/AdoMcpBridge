@@ -89,6 +89,29 @@ internal sealed class WireMockEntra : IAsyncDisposable
               .RespondWith(Response.Create().WithStatusCode(status).WithBodyAsJson(body));
     }
 
+    /// <summary>
+    /// Returns the value of a single form field from the most recent request
+    /// the server received (the token endpoint sends
+    /// <c>application/x-www-form-urlencoded</c> bodies), or <see langword="null"/>
+    /// if the field is absent.
+    /// </summary>
+    public string? LastFormValue(string key)
+    {
+        var body = Server.LogEntries.Last().RequestMessage.Body ?? string.Empty;
+        foreach (var pair in body.Split('&'))
+        {
+            var kv = pair.Split('=', 2);
+            if (kv.Length == 2 && Uri.UnescapeDataString(kv[0]) == key)
+            {
+                // FormUrlEncodedContent encodes spaces as '+'; decode those
+                // before percent-decoding the rest of the value.
+                return Uri.UnescapeDataString(kv[1].Replace('+', ' '));
+            }
+        }
+
+        return null;
+    }
+
     public ValueTask DisposeAsync()
     {
         Server.Stop();

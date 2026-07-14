@@ -127,6 +127,18 @@ AdoMcpBridge/
   but the Remote MCP server is its own Entra resource and rejects
   ADO-audience tokens; `openid`/`profile` are required because the
   bridge reads `oid`/`preferred_username` from the id_token.
+  *Corrected 2026-07-14:* the native custom tools (introduced later —
+  they call the Azure DevOps REST API directly rather than through the
+  MCP-server proxy) do need the classic ADO scope after all, but
+  requested via a **separate** second token acquisition: another
+  refresh-token grant against the same stored refresh token, requesting
+  `499b84ac-1321-427f-aa17-267ca6975798/user_impersonation` instead of
+  `Ado.Mcp.Tools`, not mixed into the same token request that talks to
+  the MCP server. The two resources reject each other's audiences (as
+  already noted above), so the bridge now holds two separate scope
+  configurations — `Scopes` for the proxy path, `AdoRestScopes` for the
+  native-tool path — and mints two differently-audienced tokens per
+  request that touches a native tool.
 - **Single tenant.**
 
 ### End-to-end flow
