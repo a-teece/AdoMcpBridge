@@ -56,6 +56,10 @@ builder.Services.AddSingleton<ICustomMcpTool, CreateUploadSlotTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WriteFieldFromSlotTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WitGetSlimTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WitGetBatchSlimTool>();
+builder.Services.AddSingleton<ICustomMcpTool, ApprovalsListTool>();
+builder.Services.AddSingleton<ICustomMcpTool, ApprovalsGetTool>();
+builder.Services.AddSingleton<ICustomMcpTool, ApprovalsApproveTool>();
+builder.Services.AddSingleton<ICustomMcpTool, ApprovalsRejectTool>();
 
 builder.Services.AddMcpProxy(builder.Configuration);
 
