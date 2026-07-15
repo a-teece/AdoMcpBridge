@@ -48,7 +48,34 @@ public interface IAdoRestClient
     /// </summary>
     Task<IReadOnlySet<string>> GetFieldRefNamesByTypeAsync(
         string org, IReadOnlySet<string> types, CancellationToken ct = default);
+
+    /// <summary>
+    /// Queries pipeline stage/check approvals in a project. Only the supplied
+    /// filters are applied; array filters are comma-joined. Returns the cloned
+    /// <c>value[]</c> approval elements (empty when the response has none).
+    /// </summary>
+    Task<IReadOnlyList<JsonElement>> QueryApprovalsAsync(
+        string org, string project, IReadOnlyList<string>? approvalIds, string? state,
+        IReadOnlyList<string>? userIds, int? top, string? expand, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns a single approval by id, or <see langword="null"/> when it does
+    /// not exist (HTTP 404). <paramref name="expand"/> is appended only when set.
+    /// </summary>
+    Task<JsonElement?> GetApprovalAsync(
+        string org, string project, string approvalId, string? expand, CancellationToken ct = default);
+
+    /// <summary>
+    /// Approves or rejects one or more approvals as the delegated caller. ADO
+    /// enforces who may action each approval. Returns the cloned <c>value[]</c>
+    /// approval elements reflecting the real post-update state.
+    /// </summary>
+    Task<IReadOnlyList<JsonElement>> UpdateApprovalsAsync(
+        string org, string project, IReadOnlyList<ApprovalUpdate> updates, CancellationToken ct = default);
 }
+
+/// <summary>A single approve/reject instruction for <see cref="IAdoRestClient.UpdateApprovalsAsync"/>.</summary>
+public sealed record ApprovalUpdate(string ApprovalId, string Status, string? Comment);
 
 internal sealed class AdoRestClient : IAdoRestClient
 {
@@ -216,6 +243,113 @@ internal sealed class AdoRestClient : IAdoRestClient
                 }
             }
         }
+        return result;
+    }
+
+    public async Task<IReadOnlyList<JsonElement>> QueryApprovalsAsync(
+        string org, string project, IReadOnlyList<string>? approvalIds, string? state,
+        IReadOnlyList<string>? userIds, int? top, string? expand, CancellationToken ct = default)
+    {
+        var query = new List<string> { "api-version=7.1" };
+        if (approvalIds is { Count: > 0 })
+            query.Add($"approvalIds={string.Join(",", approvalIds.Select(Uri.EscapeDataString))}");
+        if (expand is not null)
+            query.Add($"{Uri.EscapeDataString("$expand")}={Uri.EscapeDataString(expand)}");
+        if (userIds is { Count: > 0 })
+            query.Add($"userIds={string.Join(",", userIds.Select(Uri.EscapeDataString))}");
+        if (!string.IsNullOrEmpty(state))
+            query.Add($"state={Uri.EscapeDataString(state)}");
+        if (top is not null)
+            query.Add($"top={top.Value}");
+
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
+                  $"/{Uri.EscapeDataString(project)}/_apis/pipelines/approvals" +
+                  $"?{string.Join("&", query)}";
+
+        using var req = BuildRequest(HttpMethod.Get, url, body: null);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            _logger.LogWarning("ADO query approvals in {Org}/{Project} returned {Status}: {Body}",
+                org, project, (int)res.StatusCode, err);
+            res.EnsureSuccessStatusCode();
+        }
+
+        var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+
+        var result = new List<JsonElement>();
+        if (doc.RootElement.TryGetProperty("value", out var values))
+            foreach (var item in values.EnumerateArray())
+                result.Add(item.Clone());
+
+        return result;
+    }
+
+    public async Task<JsonElement?> GetApprovalAsync(
+        string org, string project, string approvalId, string? expand, CancellationToken ct = default)
+    {
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
+                  $"/{Uri.EscapeDataString(project)}/_apis/pipelines/approvals" +
+                  $"/{Uri.EscapeDataString(approvalId)}?";
+        if (expand is not null)
+            url += $"{Uri.EscapeDataString("$expand")}={Uri.EscapeDataString(expand)}&";
+        url += "api-version=7.1";
+
+        using var req = BuildRequest(HttpMethod.Get, url, body: null);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+
+        if (res.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            _logger.LogWarning("ADO GET approval {Id} returned {Status}: {Body}",
+                approvalId, (int)res.StatusCode, err);
+            res.EnsureSuccessStatusCode();
+        }
+
+        var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.Clone();
+    }
+
+    public async Task<IReadOnlyList<JsonElement>> UpdateApprovalsAsync(
+        string org, string project, IReadOnlyList<ApprovalUpdate> updates, CancellationToken ct = default)
+    {
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
+                  $"/{Uri.EscapeDataString(project)}/_apis/pipelines/approvals?api-version=7.1";
+
+        var payload = updates.Select(u =>
+        {
+            var obj = new Dictionary<string, object> { ["approvalId"] = u.ApprovalId, ["status"] = u.Status };
+            if (u.Comment is not null) obj["comment"] = u.Comment;
+            return obj;
+        }).ToList();
+
+        var body = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+        using var req = BuildRequest(HttpMethod.Patch, url, body);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            _logger.LogWarning("ADO update approvals in {Org}/{Project} returned {Status}: {Body}",
+                org, project, (int)res.StatusCode, err);
+            res.EnsureSuccessStatusCode();
+        }
+
+        var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+
+        var result = new List<JsonElement>();
+        if (doc.RootElement.TryGetProperty("value", out var values))
+            foreach (var item in values.EnumerateArray())
+                result.Add(item.Clone());
+
         return result;
     }
 

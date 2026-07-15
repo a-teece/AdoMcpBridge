@@ -386,7 +386,9 @@ az containerapp revision restart -n ca-adomcp-prod -g rg-adomcp-prod `
 
 The native custom tools (`ado_bridge_wit_get`,
 `ado_bridge_wit_get_batch`, `ado_bridge_download_field`,
-`ado_bridge_create_upload_slot`, `ado_bridge_write_field_from_slot`)
+`ado_bridge_create_upload_slot`, `ado_bridge_write_field_from_slot`,
+`ado_bridge_approvals_list`, `ado_bridge_approvals_get`,
+`ado_bridge_approvals_approve`, `ado_bridge_approvals_reject`)
 call the Azure DevOps REST API authenticated as **the signed-in end
 user**, using the second delegated grant set up in step 1 — not as the
 bridge's managed identity. There is no service-identity provisioning
@@ -401,6 +403,17 @@ same as if they'd called the REST API directly.
 > - `ado_bridge_create_upload_slot` / `ado_bridge_write_field_from_slot` —
 >   `PATCH /_apis/wit/workitems/{id}` requires "Edit work items in this
 >   node".
+> - `ado_bridge_approvals_list` / `ado_bridge_approvals_get` —
+>   `GET /_apis/pipelines/approvals` requires permission to view the
+>   approval (typically "View builds"/pipeline read on the owning
+>   pipeline); the user only sees approvals their ADO permissions expose.
+> - `ado_bridge_approvals_approve` / `ado_bridge_approvals_reject` —
+>   `PATCH /_apis/pipelines/approvals` requires the caller to be an
+>   **assigned approver** on that check. ADO rejects the update otherwise,
+>   so the bridge never widens who can action an approval. Note that when a
+>   check needs multiple approvers, a single approve leaves the approval
+>   `pending` until the quorum is met — the tool returns the real
+>   resulting status.
 
 Nothing beyond a normal ADO user's permissions needs configuring per
 user; there's no group membership or org-level user add to perform.
