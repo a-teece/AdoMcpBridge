@@ -6,6 +6,13 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.14](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.13...v0.1.14) (2026-07-15)
+
+
+### Features
+
+* add native pipeline-approval tools ([#61](https://github.com/a-teece/AdoMcpBridge/issues/61)) ([5cda8cb](https://github.com/a-teece/AdoMcpBridge/commit/5cda8cb030413fd89b5b5c9ed15ec843dc9acd87))
+
 ## [0.1.13](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.12...v0.1.13) (2026-07-14)
 
 
