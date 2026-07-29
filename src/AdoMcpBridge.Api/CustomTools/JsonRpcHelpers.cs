@@ -97,6 +97,7 @@ internal static class JsonRpcHelpers
 
         var node = JsonNode.Parse(responseBytes)!;
         var toolsArray = node["result"]!["tools"]!.AsArray();
+        UpstreamSchemaPatches.PatchToolsArray(toolsArray);
         foreach (var tool in extraTools)
         {
             toolsArray.Add(BuildToolDefinition(tool));
@@ -127,6 +128,7 @@ internal static class JsonRpcHelpers
                 {
                     var node = JsonNode.Parse(json)!;
                     var toolsArray = node["result"]!["tools"]!.AsArray();
+                    UpstreamSchemaPatches.PatchToolsArray(toolsArray);
                     foreach (var tool in extraTools)
                     {
                         toolsArray.Add(BuildToolDefinition(tool));
