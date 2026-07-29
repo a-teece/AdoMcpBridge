@@ -6,6 +6,13 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.15](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.14...v0.1.15) (2026-07-29)
+
+
+### Bug Fixes
+
+* coerce wit_work_item_write array params past a missing upstream schema type ([#63](https://github.com/a-teece/AdoMcpBridge/issues/63)) ([ee7263b](https://github.com/a-teece/AdoMcpBridge/commit/ee7263b2ca08bf8675b3ca3c931e622b4ada3e37))
+
 ## [0.1.14](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.13...v0.1.14) (2026-07-15)
 
 
