@@ -82,6 +82,12 @@ internal sealed class CustomToolMiddleware
                     await HandleToolCallAsync(context, tool, args, id, encryptor, entra);
                     return;
                 }
+
+                if (toolName == WitWorkItemWriteArgumentNormalizer.ToolName &&
+                    await TryForwardNormalizedWitWorkItemWriteAsync(context, root, id))
+                {
+                    return;
+                }
             }
 
             if (method == "tools/list")
@@ -139,6 +145,38 @@ internal sealed class CustomToolMiddleware
         }
 
         await JsonRpcHelpers.WriteResultAsync(context.Response, id, result, context.RequestAborted);
+    }
+
+    /// <summary>
+    /// Coerces wit_work_item_write's array-valued parameters into real JSON arrays
+    /// before forwarding to upstream — see <see cref="WitWorkItemWriteArgumentNormalizer"/>.
+    /// Returns <see langword="true"/> if the request was handled (forwarded with a
+    /// rewritten body, or rejected with a JSON-RPC error); <see langword="false"/> if no
+    /// normalisation was needed and the caller should fall through to the normal
+    /// unmodified pass-through.
+    /// </summary>
+    private async Task<bool> TryForwardNormalizedWitWorkItemWriteAsync(
+        HttpContext context, JsonElement root, JsonElement? id)
+    {
+        byte[]? rewritten;
+        try
+        {
+            rewritten = WitWorkItemWriteArgumentNormalizer.NormalizeRequestBody(root);
+        }
+        catch (WitWorkItemWriteArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Rejecting malformed wit_work_item_write arguments");
+            await JsonRpcHelpers.WriteErrorAsync(context.Response, id, -32602, ex.Message, context.RequestAborted);
+            return true;
+        }
+
+        if (rewritten is null) return false;
+
+        _logger.LogDebug("Normalised wit_work_item_write array arguments before forwarding upstream");
+        context.Request.Body = new MemoryStream(rewritten);
+        context.Request.ContentLength = rewritten.Length;
+        await _next(context);
+        return true;
     }
 
     private async Task HandleToolsListAsync(HttpContext context)

@@ -124,4 +124,91 @@ public sealed class CustomToolMiddlewareTests
         error.GetProperty("code").GetInt32().Should().Be(-32000);
         error.GetProperty("message").GetString().Should().Be("ADO authentication failed");
     }
+
+    private static DefaultHttpContext ContextForWitWorkItemWriteCall(string argumentsJson)
+    {
+        var body =
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\"," +
+            "\"params\":{\"name\":\"wit_work_item_write\",\"arguments\":" + argumentsJson + "}}";
+        var bytes = Encoding.UTF8.GetBytes(body);
+
+        var ctx = new DefaultHttpContext();
+        ctx.Request.Method = HttpMethods.Post;
+        ctx.Request.ContentType = "application/json";
+        ctx.Request.ContentLength = bytes.Length;
+        ctx.Request.Body = new MemoryStream(bytes);
+        ctx.Response.Body = new MemoryStream();
+        return ctx;
+    }
+
+    private static async Task<byte[]> ReadAllAsync(Stream stream)
+    {
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        return ms.ToArray();
+    }
+
+    [Fact]
+    public async Task Forwards_wit_work_item_write_unmodified_when_fields_is_already_an_array()
+    {
+        var ctx = ContextForWitWorkItemWriteCall(
+            "{\"action\":\"create\",\"fields\":[{\"name\":\"System.Title\",\"value\":\"x\"}]}");
+
+        byte[]? forwarded = null;
+        var mw = new CustomToolMiddleware(
+            async c => forwarded = await ReadAllAsync(c.Request.Body),
+            Array.Empty<ICustomMcpTool>(),
+            NullLogger<CustomToolMiddleware>.Instance);
+
+        await mw.InvokeAsync(ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>());
+
+        forwarded.Should().NotBeNull();
+        using var doc = JsonDocument.Parse(forwarded!);
+        doc.RootElement.GetProperty("params").GetProperty("arguments").GetProperty("fields")
+            .ValueKind.Should().Be(JsonValueKind.Array);
+    }
+
+    [Fact]
+    public async Task Rewrites_and_forwards_wit_work_item_write_when_fields_arrives_as_a_json_string()
+    {
+        var ctx = ContextForWitWorkItemWriteCall(
+            "{\"action\":\"create\",\"fields\":\"[{\\\"name\\\":\\\"System.Title\\\",\\\"value\\\":\\\"x\\\"}]\"}");
+
+        byte[]? forwarded = null;
+        var mw = new CustomToolMiddleware(
+            async c => forwarded = await ReadAllAsync(c.Request.Body),
+            Array.Empty<ICustomMcpTool>(),
+            NullLogger<CustomToolMiddleware>.Instance);
+
+        await mw.InvokeAsync(ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>());
+
+        forwarded.Should().NotBeNull();
+        using var doc = JsonDocument.Parse(forwarded!);
+        var fields = doc.RootElement.GetProperty("params").GetProperty("arguments").GetProperty("fields");
+        fields.ValueKind.Should().Be(JsonValueKind.Array);
+        fields[0].GetProperty("name").GetString().Should().Be("System.Title");
+    }
+
+    [Fact]
+    public async Task Rejects_malformed_wit_work_item_write_fields_without_forwarding()
+    {
+        var ctx = ContextForWitWorkItemWriteCall("{\"action\":\"create\",\"fields\":\"not valid json{\"}");
+
+        var nextCalled = false;
+        var mw = new CustomToolMiddleware(
+            _ => { nextCalled = true; return Task.CompletedTask; },
+            Array.Empty<ICustomMcpTool>(),
+            NullLogger<CustomToolMiddleware>.Instance);
+
+        await mw.InvokeAsync(ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>());
+
+        nextCalled.Should().BeFalse();
+
+        ctx.Response.Body.Seek(0, SeekOrigin.Begin);
+        var responseText = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
+        using var doc = JsonDocument.Parse(responseText);
+        var error = doc.RootElement.GetProperty("error");
+        error.GetProperty("code").GetInt32().Should().Be(-32602);
+        error.GetProperty("message").GetString().Should().Contain("fields");
+    }
 }
