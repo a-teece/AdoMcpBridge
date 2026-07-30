@@ -24,6 +24,20 @@ internal static class WitWorkItemWriteArgumentNormalizer
 
     private static readonly string[] ArrayParameterNames = ["fields", "updates", "items", "batchUpdates"];
 
+    // Azure DevOps silently ignores a /fields/System.Parent patch — the parent/child
+    // link lives in the relations API, not the fields collection. Left alone the write
+    // looks like it succeeded but the parent never changed, so we reject it loudly and
+    // name the correct primitive rather than let a caller ship a wrong (or missing) parent.
+    private const string ParentFieldRefName = "System.Parent";
+    private const string ParentFieldPatchPath = "/fields/System.Parent";
+
+    private const string ParentWriteGuidance =
+        "'System.Parent' cannot be set through a work-item field write — Azure DevOps silently " +
+        "ignores it and the parent never changes. Set the parent by adding a hierarchy relation " +
+        "instead: PATCH the work item with op 'add', path '/relations/-', value " +
+        "{ \"rel\": \"System.LinkTypes.Hierarchy-Reverse\", \"url\": \"<parent work item REST URL>\" } " +
+        "(or use your MCP client's work-item link tool). Remove 'System.Parent' from this write.";
+
     /// <summary>
     /// Returns the rewritten JSON-RPC request body if any array parameter needed
     /// normalisation, or <see langword="null"/> if the request can be forwarded
@@ -43,6 +57,7 @@ internal static class WitWorkItemWriteArgumentNormalizer
             if (!arguments.TryGetPropertyValue(name, out var value) || value is null) continue;
 
             JsonArray normalized = NormalizeArrayParameter(name, value);
+            RejectParentFieldWrite(normalized);
             if (!ReferenceEquals(normalized, value))
             {
                 arguments[name] = normalized;
@@ -52,6 +67,34 @@ internal static class WitWorkItemWriteArgumentNormalizer
 
         return changed ? Encoding.UTF8.GetBytes(node.ToJsonString()) : null;
     }
+
+    /// <summary>
+    /// Fails the write if any entry targets <c>System.Parent</c> — either the
+    /// name/value shape (<c>{ "name": "System.Parent" }</c>) or the JSON-Patch shape
+    /// (<c>{ "path": "/fields/System.Parent" }</c>) — which ADO would silently drop.
+    /// Runs against the already-normalised array so a parent hidden inside a
+    /// JSON-encoded string argument is still caught.
+    /// </summary>
+    /// <exception cref="WitWorkItemWriteArgumentException">A parent field write was found.</exception>
+    private static void RejectParentFieldWrite(JsonArray array)
+    {
+        foreach (var item in array)
+        {
+            if (item is not JsonObject obj) continue;
+
+            if (StringPropertyEquals(obj, "name", ParentFieldRefName) ||
+                StringPropertyEquals(obj, "path", ParentFieldPatchPath))
+            {
+                throw new WitWorkItemWriteArgumentException(ParentWriteGuidance);
+            }
+        }
+    }
+
+    private static bool StringPropertyEquals(JsonObject obj, string property, string expected)
+        => obj.TryGetPropertyValue(property, out var node) &&
+           node is JsonValue value &&
+           value.TryGetValue<string>(out var actual) &&
+           string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase);
 
     private static JsonArray NormalizeArrayParameter(string paramName, JsonNode value)
     {

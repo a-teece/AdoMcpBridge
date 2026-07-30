@@ -176,4 +176,90 @@ public sealed class WitWorkItemWriteArgumentNormalizerTests
 
         result.Should().BeNull();
     }
+
+    // ── System.Parent guard (silent no-op in ADO — reject loudly) ─────────────
+
+    [Fact]
+    public void System_Parent_field_write_is_rejected_with_relations_guidance()
+    {
+        using var doc = BuildRequest(
+            "{\"action\":\"update\",\"fields\":[{\"name\":\"System.Parent\",\"value\":123}]}");
+
+        var act = () => WitWorkItemWriteArgumentNormalizer.NormalizeRequestBody(doc.RootElement);
+
+        act.Should().Throw<WitWorkItemWriteArgumentException>()
+            .WithMessage("*System.Parent*")
+            .WithMessage("*Hierarchy-Reverse*");
+    }
+
+    [Fact]
+    public void System_Parent_is_rejected_case_insensitively()
+    {
+        using var doc = BuildRequest(
+            "{\"action\":\"update\",\"fields\":[{\"name\":\"system.parent\",\"value\":\"123\"}]}");
+
+        var act = () => WitWorkItemWriteArgumentNormalizer.NormalizeRequestBody(doc.RootElement);
+
+        act.Should().Throw<WitWorkItemWriteArgumentException>().WithMessage("*System.Parent*");
+    }
+
+    [Fact]
+    public void System_Parent_is_rejected_even_when_hidden_in_a_json_encoded_string()
+    {
+        var arrayText = JsonSerializer.Serialize(new[] { new { name = "System.Parent", value = "123" } });
+        using var doc = BuildRequest(
+            "{\"action\":\"update\",\"fields\":" + JsonSerializer.Serialize(arrayText) + "}");
+
+        var act = () => WitWorkItemWriteArgumentNormalizer.NormalizeRequestBody(doc.RootElement);
+
+        act.Should().Throw<WitWorkItemWriteArgumentException>().WithMessage("*System.Parent*");
+    }
+
+    [Fact]
+    public void System_Parent_is_rejected_when_supplied_as_a_field_map()
+    {
+        using var doc = BuildRequest(
+            "{\"action\":\"update\",\"fields\":{\"System.Parent\":123}}");
+
+        var act = () => WitWorkItemWriteArgumentNormalizer.NormalizeRequestBody(doc.RootElement);
+
+        act.Should().Throw<WitWorkItemWriteArgumentException>().WithMessage("*System.Parent*");
+    }
+
+    [Fact]
+    public void System_Parent_is_rejected_via_json_patch_path_in_batchUpdates()
+    {
+        using var doc = BuildRequest(
+            "{\"action\":\"update_batch\",\"batchUpdates\":" +
+            "[{\"id\":1,\"op\":\"add\",\"path\":\"/fields/System.Parent\",\"value\":123}]}");
+
+        var act = () => WitWorkItemWriteArgumentNormalizer.NormalizeRequestBody(doc.RootElement);
+
+        act.Should().Throw<WitWorkItemWriteArgumentException>()
+            .WithMessage("*System.Parent*")
+            .WithMessage("*Hierarchy-Reverse*");
+    }
+
+    [Fact]
+    public void Sibling_json_patch_path_without_parent_is_not_rejected()
+    {
+        using var doc = BuildRequest(
+            "{\"action\":\"update_batch\",\"batchUpdates\":" +
+            "[{\"id\":1,\"op\":\"add\",\"path\":\"/fields/System.State\",\"value\":\"Active\"}]}");
+
+        var act = () => WitWorkItemWriteArgumentNormalizer.NormalizeRequestBody(doc.RootElement);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Sibling_fields_write_without_parent_is_not_rejected()
+    {
+        using var doc = BuildRequest(
+            "{\"action\":\"update\",\"fields\":[{\"name\":\"System.Title\",\"value\":\"x\"}]}");
+
+        var act = () => WitWorkItemWriteArgumentNormalizer.NormalizeRequestBody(doc.RootElement);
+
+        act.Should().NotThrow();
+    }
 }
