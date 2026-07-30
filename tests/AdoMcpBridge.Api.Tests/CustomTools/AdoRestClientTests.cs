@@ -309,4 +309,90 @@ public class AdoRestClientTests
 
         await act.Should().ThrowAsync<HttpRequestException>();
     }
+
+    // ── work-item comments ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetWorkItemCommentsAsync_returns_the_comments_array_cloned()
+    {
+        var (client, handler) = CreateClient(Json(
+            "{\"totalCount\":2,\"count\":2,\"comments\":[{\"id\":1,\"text\":\"a\"},{\"id\":2,\"text\":\"b\"}]}"));
+
+        var comments = await client.GetWorkItemCommentsAsync("org", "proj", 42);
+
+        comments.Should().HaveCount(2);
+        comments[0].GetProperty("id").GetInt32().Should().Be(1);
+        handler.LastRequest!.RequestUri!.AbsoluteUri.Should()
+            .Be("https://dev.azure.com/org/proj/_apis/wit/workItems/42/comments?api-version=7.1-preview.4");
+        handler.LastRequest.Headers.Authorization!.Parameter.Should().Be(CallerToken);
+    }
+
+    [Fact]
+    public async Task GetWorkItemCommentsAsync_returns_empty_when_no_comments_property()
+    {
+        var (client, _) = CreateClient(Json("{\"totalCount\":0,\"count\":0}"));
+
+        var comments = await client.GetWorkItemCommentsAsync("org", "proj", 42);
+
+        comments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetWorkItemCommentsAsync_throws_on_non_success()
+    {
+        var (client, _) = CreateClient(Json("nope", HttpStatusCode.Unauthorized));
+
+        var act = () => client.GetWorkItemCommentsAsync("org", "proj", 42);
+
+        await act.Should().ThrowAsync<HttpRequestException>();
+    }
+
+    [Fact]
+    public async Task GetWorkItemCommentAsync_returns_the_single_comment()
+    {
+        var (client, handler) = CreateClient(Json("{\"id\":7,\"text\":\"hello\"}"));
+
+        var comment = await client.GetWorkItemCommentAsync("org", "proj", 42, 7);
+
+        comment.Should().NotBeNull();
+        comment!.Value.GetProperty("text").GetString().Should().Be("hello");
+        handler.LastRequest!.RequestUri!.AbsoluteUri.Should()
+            .Be("https://dev.azure.com/org/proj/_apis/wit/workItems/42/comments/7?api-version=7.1-preview.4");
+    }
+
+    [Fact]
+    public async Task GetWorkItemCommentAsync_returns_null_on_404()
+    {
+        var (client, _) = CreateClient(Json("{}", HttpStatusCode.NotFound));
+
+        var comment = await client.GetWorkItemCommentAsync("org", "proj", 42, 7);
+
+        comment.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task AddWorkItemCommentAsync_posts_the_text_and_returns_created_comment()
+    {
+        var (client, handler) = CreateClient(Json("{\"id\":99,\"text\":\"posted\"}"));
+
+        var created = await client.AddWorkItemCommentAsync("org", "proj", 42, "posted");
+
+        created.GetProperty("id").GetInt32().Should().Be(99);
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Post);
+        handler.LastRequest.RequestUri!.AbsoluteUri.Should()
+            .Be("https://dev.azure.com/org/proj/_apis/wit/workItems/42/comments?api-version=7.1-preview.4");
+        using var sent = JsonDocument.Parse(handler.LastBody!);
+        sent.RootElement.GetProperty("text").GetString().Should().Be("posted");
+        handler.LastRequest.Headers.Authorization!.Parameter.Should().Be(CallerToken);
+    }
+
+    [Fact]
+    public async Task AddWorkItemCommentAsync_throws_on_non_success()
+    {
+        var (client, _) = CreateClient(Json("bad", HttpStatusCode.BadRequest));
+
+        var act = () => client.AddWorkItemCommentAsync("org", "proj", 42, "x");
+
+        await act.Should().ThrowAsync<HttpRequestException>();
+    }
 }

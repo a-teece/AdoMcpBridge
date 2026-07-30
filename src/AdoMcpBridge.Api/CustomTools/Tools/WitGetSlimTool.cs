@@ -5,6 +5,13 @@ namespace AdoMcpBridge.Api.CustomTools.Tools;
 
 internal sealed class WitGetSlimTool : ICustomMcpTool
 {
+    /// <summary>
+    /// Defensive ceiling: any string field longer than this is stubbed even when it
+    /// is not a known long-text field, so a new/custom field type can never silently
+    /// reintroduce an oversized read that blows the model's context budget. Tune here.
+    /// </summary>
+    internal const int OversizeFieldCharCeiling = 4096;
+
     private readonly IAdoRestClient _ado;
     private readonly IWorkItemFieldTypeCache _fieldTypes;
     private readonly ILogger<WitGetSlimTool> _logger;
@@ -102,9 +109,9 @@ internal sealed class WitGetSlimTool : ICustomMcpTool
         writer.WriteStartObject();
         foreach (var field in fields.EnumerateObject())
         {
-            if (longTextFields.Contains(field.Name) &&
-                field.Value.ValueKind == JsonValueKind.String &&
-                field.Value.GetString() is { Length: > 0 } value)
+            if (field.Value.ValueKind == JsonValueKind.String &&
+                field.Value.GetString() is { Length: > 0 } value &&
+                (longTextFields.Contains(field.Name) || value.Length > OversizeFieldCharCeiling))
             {
                 writer.WritePropertyName(field.Name);
                 writer.WriteStartObject();

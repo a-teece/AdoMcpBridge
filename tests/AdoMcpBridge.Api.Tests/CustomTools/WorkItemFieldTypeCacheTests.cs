@@ -58,6 +58,23 @@ public class WorkItemFieldTypeCacheTests
     }
 
     [Fact]
+    public async Task Requests_history_type_so_System_History_is_stubbed()
+    {
+        IReadOnlySet<string>? requestedTypes = null;
+        _ado.GetFieldRefNamesByTypeAsync(
+                Arg.Any<string>(), Arg.Do<IReadOnlySet<string>>(t => requestedTypes = t), Arg.Any<CancellationToken>())
+            .Returns(new HashSet<string>());
+
+        var cache = CreateCache();
+        await cache.GetLongTextFieldRefNamesAsync("myorg");
+
+        requestedTypes.Should().NotBeNull();
+        requestedTypes.Should().Contain("history");
+        requestedTypes.Should().Contain("html");
+        requestedTypes.Should().Contain("plainText");
+    }
+
+    [Fact]
     public async Task Returns_empty_set_when_org_has_no_long_text_fields()
     {
         _ado.GetFieldRefNamesByTypeAsync(

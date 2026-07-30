@@ -387,6 +387,8 @@ az containerapp revision restart -n ca-adomcp-prod -g rg-adomcp-prod `
 The native custom tools (`ado_bridge_wit_get`,
 `ado_bridge_wit_get_batch`, `ado_bridge_download_field`,
 `ado_bridge_create_upload_slot`, `ado_bridge_write_field_from_slot`,
+`ado_bridge_list_comments`, `ado_bridge_get_comment`,
+`ado_bridge_add_comment`,
 `ado_bridge_approvals_list`, `ado_bridge_approvals_get`,
 `ado_bridge_approvals_approve`, `ado_bridge_approvals_reject`)
 call the Azure DevOps REST API authenticated as **the signed-in end
@@ -403,6 +405,12 @@ same as if they'd called the REST API directly.
 > - `ado_bridge_create_upload_slot` / `ado_bridge_write_field_from_slot` —
 >   `PATCH /_apis/wit/workitems/{id}` requires "Edit work items in this
 >   node".
+> - `ado_bridge_list_comments` / `ado_bridge_get_comment` —
+>   `GET /_apis/wit/workItems/{id}/comments` requires "View work items in
+>   this node" (read-only).
+> - `ado_bridge_add_comment` —
+>   `POST /_apis/wit/workItems/{id}/comments` requires "Edit work items in
+>   this node".
 > - `ado_bridge_approvals_list` / `ado_bridge_approvals_get` —
 >   `GET /_apis/pipelines/approvals` requires permission to view the
 >   approval (typically "View builds"/pipeline read on the owning

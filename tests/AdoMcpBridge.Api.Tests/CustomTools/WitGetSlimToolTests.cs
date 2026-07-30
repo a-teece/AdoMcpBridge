@@ -99,6 +99,35 @@ public class WitGetSlimToolTests
         fields.GetProperty("System.Title").GetString().Should().Be("My title");
     }
 
+    // ── oversize ceiling (defensive, type-independent) ───────────────────────
+
+    [Fact]
+    public void BuildSlimJson_stubs_oversized_field_even_when_not_a_known_long_text_field()
+    {
+        var big = new string('x', WitGetSlimTool.OversizeFieldCharCeiling + 1);
+        var wi = MakeWorkItem(1, new Dictionary<string, object?> { ["Custom.BrandNewField"] = big });
+
+        // Empty long-text set — the field is caught purely by the size ceiling.
+        var json = WitGetSlimTool.BuildSlimJson(wi!.Value, new HashSet<string>());
+
+        var field = JsonDocument.Parse(json).RootElement.GetProperty("fields").GetProperty("Custom.BrandNewField");
+        field.GetProperty("charCount").GetInt32().Should().Be(big.Length);
+        field.GetProperty("note").GetString().Should().Contain("ado_bridge_download_field");
+    }
+
+    [Fact]
+    public void BuildSlimJson_passes_through_short_unknown_field_under_the_ceiling()
+    {
+        var small = new string('x', WitGetSlimTool.OversizeFieldCharCeiling);
+        var wi = MakeWorkItem(1, new Dictionary<string, object?> { ["Custom.BrandNewField"] = small });
+
+        var json = WitGetSlimTool.BuildSlimJson(wi!.Value, new HashSet<string>());
+
+        var field = JsonDocument.Parse(json).RootElement.GetProperty("fields").GetProperty("Custom.BrandNewField");
+        field.ValueKind.Should().Be(JsonValueKind.String);
+        field.GetString()!.Length.Should().Be(small.Length);
+    }
+
     // ── InvokeAsync ──────────────────────────────────────────────────────────
 
     [Fact]

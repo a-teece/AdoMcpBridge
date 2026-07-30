@@ -50,6 +50,26 @@ public interface IAdoRestClient
         string org, IReadOnlySet<string> types, CancellationToken ct = default);
 
     /// <summary>
+    /// Returns every comment on a work item (newest first), each with its full text.
+    /// Order matches ADO's response. Empty when the item has no comments.
+    /// </summary>
+    Task<IReadOnlyList<JsonElement>> GetWorkItemCommentsAsync(
+        string org, string project, int workItemId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns a single work-item comment by id (full text), or
+    /// <see langword="null"/> when it does not exist (HTTP 404).
+    /// </summary>
+    Task<JsonElement?> GetWorkItemCommentAsync(
+        string org, string project, int workItemId, int commentId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Posts a new comment on a work item and returns the created comment element.
+    /// </summary>
+    Task<JsonElement> AddWorkItemCommentAsync(
+        string org, string project, int workItemId, string text, CancellationToken ct = default);
+
+    /// <summary>
     /// Queries pipeline stage/check approvals in a project. Only the supplied
     /// filters are applied; array filters are comma-joined. Returns the cloned
     /// <c>value[]</c> approval elements (empty when the response has none).
@@ -244,6 +264,90 @@ internal sealed class AdoRestClient : IAdoRestClient
             }
         }
         return result;
+    }
+
+    // Work-item comments live under a preview API version distinct from the 7.1 GA
+    // surface the rest of this client uses.
+    private const string CommentsApiVersion = "7.1-preview.4";
+
+    public async Task<IReadOnlyList<JsonElement>> GetWorkItemCommentsAsync(
+        string org, string project, int workItemId, CancellationToken ct = default)
+    {
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
+                  $"/{Uri.EscapeDataString(project)}/_apis/wit/workItems/{workItemId}/comments" +
+                  $"?api-version={CommentsApiVersion}";
+
+        using var req = BuildRequest(HttpMethod.Get, url, body: null);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            _logger.LogWarning("ADO GET comments WI {Id} returned {Status}: {Body}",
+                workItemId, (int)res.StatusCode, err);
+            res.EnsureSuccessStatusCode();
+        }
+
+        var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+
+        var result = new List<JsonElement>();
+        if (doc.RootElement.TryGetProperty("comments", out var comments))
+            foreach (var item in comments.EnumerateArray())
+                result.Add(item.Clone());
+
+        return result;
+    }
+
+    public async Task<JsonElement?> GetWorkItemCommentAsync(
+        string org, string project, int workItemId, int commentId, CancellationToken ct = default)
+    {
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
+                  $"/{Uri.EscapeDataString(project)}/_apis/wit/workItems/{workItemId}/comments/{commentId}" +
+                  $"?api-version={CommentsApiVersion}";
+
+        using var req = BuildRequest(HttpMethod.Get, url, body: null);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+
+        if (res.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            _logger.LogWarning("ADO GET comment {CommentId} on WI {Id} returned {Status}: {Body}",
+                commentId, workItemId, (int)res.StatusCode, err);
+            res.EnsureSuccessStatusCode();
+        }
+
+        var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.Clone();
+    }
+
+    public async Task<JsonElement> AddWorkItemCommentAsync(
+        string org, string project, int workItemId, string text, CancellationToken ct = default)
+    {
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
+                  $"/{Uri.EscapeDataString(project)}/_apis/wit/workItems/{workItemId}/comments" +
+                  $"?api-version={CommentsApiVersion}";
+
+        var payload = JsonSerializer.Serialize(new { text });
+        var body = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        using var req = BuildRequest(HttpMethod.Post, url, body);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            _logger.LogWarning("ADO POST comment on WI {Id} returned {Status}: {Body}",
+                workItemId, (int)res.StatusCode, err);
+            res.EnsureSuccessStatusCode();
+        }
+
+        var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.Clone();
     }
 
     public async Task<IReadOnlyList<JsonElement>> QueryApprovalsAsync(
