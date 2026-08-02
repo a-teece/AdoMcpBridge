@@ -6,6 +6,13 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.18](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.17...v0.1.18) (2026-08-02)
+
+
+### Features
+
+* emit tools/list_changed to stale MCP sessions after redeploy ([#69](https://github.com/a-teece/AdoMcpBridge/issues/69)) ([d78a471](https://github.com/a-teece/AdoMcpBridge/commit/d78a47102dc0166d999fd6ddf82b5a212278375e))
+
 ## [0.1.17](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.16...v0.1.17) (2026-08-02)
 
 
