@@ -6,6 +6,13 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.17](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.16...v0.1.17) (2026-08-02)
+
+
+### Features
+
+* add ado_bridge_wiql_query native tool for ad-hoc WIQL ([#67](https://github.com/a-teece/AdoMcpBridge/issues/67)) ([e3e254b](https://github.com/a-teece/AdoMcpBridge/commit/e3e254b92df9e8bddbb5c802e2ffe139bc496c03))
+
 ## [0.1.16](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.15...v0.1.16) (2026-07-30)
 
 
