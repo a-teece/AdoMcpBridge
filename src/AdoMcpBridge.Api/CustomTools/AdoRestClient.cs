@@ -92,10 +92,32 @@ public interface IAdoRestClient
     /// </summary>
     Task<IReadOnlyList<JsonElement>> UpdateApprovalsAsync(
         string org, string project, IReadOnlyList<ApprovalUpdate> updates, CancellationToken ct = default);
+
+    /// <summary>
+    /// Executes ad-hoc WIQL text against the ADO <c>wit/wiql</c> endpoint and
+    /// returns the cloned raw result element. Scope widens with each supplied
+    /// segment: org-only, org+project, or org+project+team (the last needed for
+    /// <c>@CurrentIteration</c> macros). <paramref name="top"/> maps to the
+    /// <c>$top</c> query param and <paramref name="timePrecision"/> to
+    /// <c>timePrecision</c>; both are omitted when <see langword="null"/>.
+    /// On a 4xx response the ADO error <c>message</c> (e.g. a WIQL syntax error)
+    /// is surfaced via <see cref="AdoWiqlQueryException"/> so the caller can
+    /// correct its query; other non-success statuses throw the same way.
+    /// </summary>
+    Task<JsonElement> QueryByWiqlAsync(
+        string org, string? project, string? team, string wiql, int? top, bool? timePrecision,
+        CancellationToken ct = default);
 }
 
 /// <summary>A single approve/reject instruction for <see cref="IAdoRestClient.UpdateApprovalsAsync"/>.</summary>
 public sealed record ApprovalUpdate(string ApprovalId, string Status, string? Comment);
+
+/// <summary>
+/// Carries the Azure DevOps error <c>message</c> from a failed WIQL execution so
+/// the calling agent sees the actual WIQL syntax/semantic error text (not a
+/// generic transport failure) and can correct its query.
+/// </summary>
+public sealed class AdoWiqlQueryException(string message) : Exception(message);
 
 internal sealed class AdoRestClient : IAdoRestClient
 {
@@ -455,6 +477,65 @@ internal sealed class AdoRestClient : IAdoRestClient
                 result.Add(item.Clone());
 
         return result;
+    }
+
+    public async Task<JsonElement> QueryByWiqlAsync(
+        string org, string? project, string? team, string wiql, int? top, bool? timePrecision,
+        CancellationToken ct = default)
+    {
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}";
+        if (project is not null) url += $"/{Uri.EscapeDataString(project)}";
+        if (team is not null) url += $"/{Uri.EscapeDataString(team)}";
+        url += "/_apis/wit/wiql?api-version=7.1";
+        if (top is not null) url += $"&{Uri.EscapeDataString("$top")}={top.Value}";
+        if (timePrecision is not null)
+            url += $"&timePrecision={(timePrecision.Value ? "true" : "false")}";
+
+        var payload = JsonSerializer.Serialize(new { query = wiql });
+        var body = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        using var req = BuildRequest(HttpMethod.Post, url, body);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            _logger.LogWarning("ADO WIQL query in {Org} returned {Status}.", org, (int)res.StatusCode);
+            throw new AdoWiqlQueryException(ExtractErrorMessage(err, res.StatusCode));
+        }
+
+        var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.Clone();
+    }
+
+    // ADO 4xx bodies carry the human-readable failure (e.g. WIQL syntax errors) in
+    // a top-level "message" property. Fall back to the raw body / status when the
+    // response is not the shape we expect, so no failure is silently swallowed.
+    private static string ExtractErrorMessage(string body, System.Net.HttpStatusCode status)
+    {
+        if (!string.IsNullOrWhiteSpace(body))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                    doc.RootElement.TryGetProperty("message", out var msg) &&
+                    msg.ValueKind == JsonValueKind.String &&
+                    msg.GetString() is { Length: > 0 } text)
+                {
+                    return text;
+                }
+            }
+            catch (JsonException)
+            {
+                // Non-JSON body — fall through to returning it verbatim.
+            }
+
+            return body;
+        }
+
+        return $"ADO WIQL query failed with status {(int)status}.";
     }
 
     private HttpRequestMessage BuildRequest(HttpMethod method, string url, HttpContent? body)
