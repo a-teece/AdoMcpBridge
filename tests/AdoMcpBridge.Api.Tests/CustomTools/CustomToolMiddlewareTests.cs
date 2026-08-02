@@ -82,7 +82,7 @@ public sealed class CustomToolMiddlewareTests
 
         var mw = new CustomToolMiddleware(
             _ => Task.CompletedTask, new[] { (ICustomMcpTool)tool },
-            NullLogger<CustomToolMiddleware>.Instance);
+            new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
 
         await mw.InvokeAsync(ctx, Encryptor(), entra);
 
@@ -109,7 +109,7 @@ public sealed class CustomToolMiddlewareTests
 
         var mw = new CustomToolMiddleware(
             _ => Task.CompletedTask, new[] { (ICustomMcpTool)tool },
-            NullLogger<CustomToolMiddleware>.Instance);
+            new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
 
         await mw.InvokeAsync(ctx, Encryptor(), entra);
 
@@ -158,7 +158,7 @@ public sealed class CustomToolMiddlewareTests
         var mw = new CustomToolMiddleware(
             async c => forwarded = await ReadAllAsync(c.Request.Body),
             Array.Empty<ICustomMcpTool>(),
-            NullLogger<CustomToolMiddleware>.Instance);
+            new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
 
         await mw.InvokeAsync(ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>());
 
@@ -178,7 +178,7 @@ public sealed class CustomToolMiddlewareTests
         var mw = new CustomToolMiddleware(
             async c => forwarded = await ReadAllAsync(c.Request.Body),
             Array.Empty<ICustomMcpTool>(),
-            NullLogger<CustomToolMiddleware>.Instance);
+            new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
 
         await mw.InvokeAsync(ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>());
 
@@ -198,7 +198,7 @@ public sealed class CustomToolMiddlewareTests
         var mw = new CustomToolMiddleware(
             _ => { nextCalled = true; return Task.CompletedTask; },
             Array.Empty<ICustomMcpTool>(),
-            NullLogger<CustomToolMiddleware>.Instance);
+            new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
 
         await mw.InvokeAsync(ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>());
 

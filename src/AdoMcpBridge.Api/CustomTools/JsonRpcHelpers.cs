@@ -8,6 +8,124 @@ internal static class JsonRpcHelpers
 {
     private static readonly JsonSerializerOptions _pretty = new() { WriteIndented = false };
 
+    /// <summary>
+    /// The MCP <c>notifications/tools/list_changed</c> message, serialised as a single
+    /// JSON-RPC notification (no <c>id</c>). Injected into stale sessions after a redeploy
+    /// so clients re-fetch the current tool list.
+    /// </summary>
+    public const string ToolsListChangedNotification =
+        "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/tools/list_changed\"}";
+
+    /// <summary>
+    /// Patches an <c>initialize</c> response so it advertises
+    /// <c>result.capabilities.tools.listChanged = true</c>, creating the
+    /// <c>capabilities</c> and/or <c>tools</c> objects if upstream omitted them. Handles
+    /// both plain-JSON and SSE bodies. Returns the original bytes unchanged if the body
+    /// cannot be parsed or carries no <c>result</c>.
+    /// </summary>
+    public static byte[] PatchInitializeListChanged(byte[] responseBytes)
+    {
+        try
+        {
+            var text = Encoding.UTF8.GetString(responseBytes);
+            var trimmed = text.TrimStart();
+            var isSse = trimmed.StartsWith("data:", StringComparison.Ordinal) ||
+                        trimmed.StartsWith("event:", StringComparison.Ordinal);
+
+            return isSse
+                ? PatchInitializeSse(text)
+                : PatchInitializeJson(responseBytes);
+        }
+        catch
+        {
+            // Never break the proxy — return the original bytes unchanged.
+            return responseBytes;
+        }
+    }
+
+    /// <summary>
+    /// If <paramref name="responseBytes"/> is an SSE body, prepends a
+    /// <c>notifications/tools/list_changed</c> frame BEFORE the existing frame(s) and
+    /// returns <see langword="true"/>. If the body is plain JSON (not SSE) the bytes are
+    /// returned unchanged and the result is <see langword="false"/> — a second message
+    /// cannot be safely appended to a bare JSON object now that MCP has removed batching.
+    /// </summary>
+    public static bool TryPrependToolsListChangedFrame(byte[] responseBytes, out byte[] result)
+    {
+        var text = Encoding.UTF8.GetString(responseBytes);
+        var trimmed = text.TrimStart();
+        var isSse = trimmed.StartsWith("data:", StringComparison.Ordinal) ||
+                    trimmed.StartsWith("event:", StringComparison.Ordinal);
+
+        if (!isSse)
+        {
+            result = responseBytes;
+            return false;
+        }
+
+        var frame = "event: message\ndata: " + ToolsListChangedNotification + "\n\n";
+        result = Encoding.UTF8.GetBytes(frame + text);
+        return true;
+    }
+
+    private static byte[] PatchInitializeJson(byte[] responseBytes)
+    {
+        var node = JsonNode.Parse(responseBytes);
+        if (node?["result"] is not JsonObject result)
+        {
+            return responseBytes;
+        }
+
+        PatchCapabilitiesListChanged(result);
+        return Encoding.UTF8.GetBytes(node.ToJsonString());
+    }
+
+    private static byte[] PatchInitializeSse(string text)
+    {
+        var lines = text.Split('\n');
+        var sb = new StringBuilder();
+
+        foreach (var line in lines)
+        {
+            if (line.StartsWith("data:", StringComparison.Ordinal))
+            {
+                var json = line["data:".Length..].Trim();
+                if (json is not ("[DONE]" or ""))
+                {
+                    var node = JsonNode.Parse(json);
+                    if (node?["result"] is JsonObject result)
+                    {
+                        PatchCapabilitiesListChanged(result);
+                        sb.Append("data: ");
+                        sb.AppendLine(node.ToJsonString());
+                        continue;
+                    }
+                }
+            }
+
+            sb.AppendLine(line);
+        }
+
+        return Encoding.UTF8.GetBytes(sb.ToString());
+    }
+
+    private static void PatchCapabilitiesListChanged(JsonObject result)
+    {
+        if (result["capabilities"] is not JsonObject capabilities)
+        {
+            capabilities = new JsonObject();
+            result["capabilities"] = capabilities;
+        }
+
+        if (capabilities["tools"] is not JsonObject tools)
+        {
+            tools = new JsonObject();
+            capabilities["tools"] = tools;
+        }
+
+        tools["listChanged"] = true;
+    }
+
     public static async Task WriteResultAsync(
         HttpResponse response, JsonElement? requestId, McpToolResult result, CancellationToken ct)
     {

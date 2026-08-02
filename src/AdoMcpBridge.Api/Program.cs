@@ -49,6 +49,12 @@ builder.Services.AddHttpClient<IAdoRestClient, AdoRestClient>();
 // process lifetime (field types change only when org admins add custom fields).
 builder.Services.AddSingleton<IWorkItemFieldTypeCache, WorkItemFieldTypeCache>();
 
+// Process-lifetime registry of MCP session ids seen by this process. Drives the
+// self-healing tools/list_changed refresh: any session this process never saw
+// initialize predates the current deploy and gets one notification so the client
+// re-fetches the (possibly changed) tool list. See McpSessionRegistry.
+builder.Services.AddSingleton<IMcpSessionRegistry, McpSessionRegistry>();
+
 // Custom MCP tools — registered as ICustomMcpTool so the middleware can
 // resolve them all at once via IEnumerable<ICustomMcpTool>.
 builder.Services.AddSingleton<ICustomMcpTool, DownloadFieldTool>();
