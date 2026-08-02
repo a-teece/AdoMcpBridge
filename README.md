@@ -80,6 +80,13 @@ as ingress IP restrictions.
   Connector against the same `/authorize` + `/token` endpoints;
   `/connector-info.json` serves the connector card metadata.
 
+After a bridge redeploy changes the tool list, surviving sessions are
+refreshed automatically: the bridge emits a single
+`notifications/tools/list_changed` to sessions that predate the deploy,
+and honouring clients re-fetch tools mid-session with no restart. See
+[`docs/deployment.md`](docs/deployment.md) ("Tool schemas refresh
+themselves after a redeploy") for the one restart-required caveat.
+
 ## Operations
 
 - [`docs/deployment.md`](docs/deployment.md) — step-by-step deployment

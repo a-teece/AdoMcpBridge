@@ -517,6 +517,31 @@ To roll back, deploy the previous tag the same way (unless the
 changelog flagged an irreversible migration — see
 [`docs/runbook.md`](runbook.md), scenario 6).
 
+### Tool schemas refresh themselves after a redeploy
+
+The bridge advertises a different tool list across releases (native
+tools are added or changed), but MCP clients cache tool schemas for the
+life of a session. To avoid leaving connected sessions on a stale tool
+list, the bridge is self-healing: a freshly started process notices any
+MCP session it never handled `initialize` for — those sessions predate
+the deploy — and injects a single `notifications/tools/list_changed`
+into that session's next server-sent-events response. Clients that
+honour the notification (Claude Code does) automatically re-fetch the
+current tools mid-session; no user restart is needed.
+
+Two caveats:
+
+- **This deploy still needs a restart.** Sessions created before this
+  feature shipped never saw the `listChanged` capability declared at
+  `initialize`, so their clients will ignore the notification. Users on
+  such sessions must restart their MCP client once after the release
+  that introduces this behaviour. Every deploy *after* that heals
+  automatically.
+- **Multi-replica is harmless but chatty.** Each replica tracks the
+  sessions it has seen independently, so a session that is load-balanced
+  across replicas may be refreshed once per replica. A duplicate
+  refresh is a no-op for the client.
+
 ## 14. Automated CD from your own repo (advanced)
 
 If you'd rather deploy via GitHub Actions than a workstation, this repo
