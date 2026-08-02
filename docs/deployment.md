@@ -385,7 +385,8 @@ az containerapp revision restart -n ca-adomcp-prod -g rg-adomcp-prod `
 ## 9. No Azure DevOps organisation setup needed for native tools
 
 The native custom tools (`ado_bridge_wit_get`,
-`ado_bridge_wit_get_batch`, `ado_bridge_download_field`,
+`ado_bridge_wit_get_batch`, `ado_bridge_wiql_query`,
+`ado_bridge_download_field`,
 `ado_bridge_create_upload_slot`, `ado_bridge_write_field_from_slot`,
 `ado_bridge_list_comments`, `ado_bridge_get_comment`,
 `ado_bridge_add_comment`,
@@ -402,6 +403,11 @@ same as if they'd called the REST API directly.
 >   `ado_bridge_download_field` — `GET /_apis/wit/workitems/{id}?fields=...`
 >   requires "View work items in this node" (read-only) in the relevant
 >   project/area.
+> - `ado_bridge_wiql_query` — `POST /_apis/wit/wiql` runs ad-hoc WIQL text
+>   (unlike the upstream `wit_query`, which only runs saved queries) and
+>   requires "View work items in this node" (read-only). Returns work item
+>   IDs only; hydrate fields with `ado_bridge_wit_get_batch`. Pass `team`
+>   (only valid together with `project`) for `@CurrentIteration` macros.
 > - `ado_bridge_create_upload_slot` / `ado_bridge_write_field_from_slot` —
 >   `PATCH /_apis/wit/workitems/{id}` requires "Edit work items in this
 >   node".

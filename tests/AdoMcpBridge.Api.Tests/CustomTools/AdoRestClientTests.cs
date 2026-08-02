@@ -395,4 +395,168 @@ public class AdoRestClientTests
 
         await act.Should().ThrowAsync<HttpRequestException>();
     }
+
+    // ── QueryByWiqlAsync ─────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task QueryByWiqlAsync_authenticates_with_the_callers_delegated_token()
+    {
+        var (client, handler) = CreateClient(Json("{\"queryType\":\"flat\",\"workItems\":[]}"));
+
+        await client.QueryByWiqlAsync("org", null, null, "q", null, null);
+
+        handler.LastRequest!.Headers.Authorization!.Scheme.Should().Be("Bearer");
+        handler.LastRequest.Headers.Authorization.Parameter.Should().Be(CallerToken);
+    }
+
+    [Fact]
+    public async Task QueryByWiqlAsync_builds_the_org_scoped_url()
+    {
+        var (client, handler) = CreateClient(Json("{\"workItems\":[]}"));
+
+        await client.QueryByWiqlAsync("my org", null, null, "q", null, null);
+
+        handler.LastRequest!.RequestUri!.AbsoluteUri.Should()
+            .Be("https://dev.azure.com/my%20org/_apis/wit/wiql?api-version=7.1");
+    }
+
+    [Fact]
+    public async Task QueryByWiqlAsync_builds_the_project_scoped_url_with_escaped_segments()
+    {
+        var (client, handler) = CreateClient(Json("{\"workItems\":[]}"));
+
+        await client.QueryByWiqlAsync("org", "my proj", null, "q", null, null);
+
+        handler.LastRequest!.RequestUri!.AbsoluteUri.Should()
+            .Be("https://dev.azure.com/org/my%20proj/_apis/wit/wiql?api-version=7.1");
+    }
+
+    [Fact]
+    public async Task QueryByWiqlAsync_builds_the_team_scoped_url_with_escaped_segments()
+    {
+        var (client, handler) = CreateClient(Json("{\"workItems\":[]}"));
+
+        await client.QueryByWiqlAsync("org", "proj", "my team", "q", null, null);
+
+        handler.LastRequest!.RequestUri!.AbsoluteUri.Should()
+            .Be("https://dev.azure.com/org/proj/my%20team/_apis/wit/wiql?api-version=7.1");
+    }
+
+    [Fact]
+    public async Task QueryByWiqlAsync_appends_top_and_timePrecision_query_params()
+    {
+        var (client, handler) = CreateClient(Json("{\"workItems\":[]}"));
+
+        await client.QueryByWiqlAsync("org", null, null, "q", 51, true);
+
+        var url = handler.LastRequest!.RequestUri!.AbsoluteUri;
+        url.Should().Contain("%24top=51");
+        url.Should().Contain("timePrecision=true");
+    }
+
+    [Fact]
+    public async Task QueryByWiqlAsync_writes_false_timePrecision_when_disabled()
+    {
+        var (client, handler) = CreateClient(Json("{\"workItems\":[]}"));
+
+        await client.QueryByWiqlAsync("org", null, null, "q", null, false);
+
+        handler.LastRequest!.RequestUri!.AbsoluteUri.Should().Contain("timePrecision=false");
+    }
+
+    [Fact]
+    public async Task QueryByWiqlAsync_posts_the_query_text_as_the_json_body()
+    {
+        var (client, handler) = CreateClient(Json("{\"workItems\":[]}"));
+
+        await client.QueryByWiqlAsync("org", null, null, "SELECT [System.Id] FROM WorkItems", null, null);
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Post);
+        handler.LastContentType.Should().Be("application/json");
+        var root = JsonDocument.Parse(handler.LastBody!).RootElement;
+        root.GetProperty("query").GetString().Should().Be("SELECT [System.Id] FROM WorkItems");
+    }
+
+    [Fact]
+    public async Task QueryByWiqlAsync_returns_the_cloned_result_element()
+    {
+        var (client, _) = CreateClient(Json(
+            "{\"queryType\":\"flat\",\"workItems\":[{\"id\":101}]}"));
+
+        var result = await client.QueryByWiqlAsync("org", null, null, "q", null, null);
+
+        result.GetProperty("queryType").GetString().Should().Be("flat");
+        result.GetProperty("workItems")[0].GetProperty("id").GetInt32().Should().Be(101);
+    }
+
+    [Fact]
+    public async Task QueryByWiqlAsync_surfaces_the_ado_message_on_400()
+    {
+        var (client, _) = CreateClient(Json(
+            "{\"message\":\"TF51005: bad field [System.Bogus]\"}", HttpStatusCode.BadRequest));
+
+        var act = () => client.QueryByWiqlAsync("org", null, null, "q", null, null);
+
+        (await act.Should().ThrowAsync<AdoWiqlQueryException>())
+            .Which.Message.Should().Be("TF51005: bad field [System.Bogus]");
+    }
+
+    [Fact]
+    public async Task QueryByWiqlAsync_falls_back_to_raw_body_when_not_json()
+    {
+        var (client, _) = CreateClient(Json("plain-text failure", HttpStatusCode.BadRequest));
+
+        var act = () => client.QueryByWiqlAsync("org", null, null, "q", null, null);
+
+        (await act.Should().ThrowAsync<AdoWiqlQueryException>())
+            .Which.Message.Should().Be("plain-text failure");
+    }
+
+    [Fact]
+    public async Task QueryByWiqlAsync_falls_back_to_raw_body_when_json_lacks_message()
+    {
+        var (client, _) = CreateClient(Json("{\"typeKey\":\"X\"}", HttpStatusCode.BadRequest));
+
+        var act = () => client.QueryByWiqlAsync("org", null, null, "q", null, null);
+
+        (await act.Should().ThrowAsync<AdoWiqlQueryException>())
+            .Which.Message.Should().Be("{\"typeKey\":\"X\"}");
+    }
+
+    [Fact]
+    public async Task QueryByWiqlAsync_falls_back_to_raw_body_when_message_is_not_a_string()
+    {
+        var (client, _) = CreateClient(Json("{\"message\":123}", HttpStatusCode.BadRequest));
+
+        var act = () => client.QueryByWiqlAsync("org", null, null, "q", null, null);
+
+        (await act.Should().ThrowAsync<AdoWiqlQueryException>())
+            .Which.Message.Should().Be("{\"message\":123}");
+    }
+
+    [Fact]
+    public async Task QueryByWiqlAsync_falls_back_to_raw_body_when_root_is_not_an_object()
+    {
+        var (client, _) = CreateClient(Json("[\"unexpected\"]", HttpStatusCode.BadRequest));
+
+        var act = () => client.QueryByWiqlAsync("org", null, null, "q", null, null);
+
+        (await act.Should().ThrowAsync<AdoWiqlQueryException>())
+            .Which.Message.Should().Be("[\"unexpected\"]");
+    }
+
+    [Fact]
+    public async Task QueryByWiqlAsync_falls_back_to_status_when_body_is_empty()
+    {
+        var (client, _) = CreateClient(
+            new HttpResponseMessage(HttpStatusCode.InternalServerError)
+            {
+                Content = new StringContent("", Encoding.UTF8, "application/json"),
+            });
+
+        var act = () => client.QueryByWiqlAsync("org", null, null, "q", null, null);
+
+        (await act.Should().ThrowAsync<AdoWiqlQueryException>())
+            .Which.Message.Should().Contain("500");
+    }
 }
