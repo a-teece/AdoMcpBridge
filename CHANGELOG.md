@@ -6,6 +6,16 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.19](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.18...v0.1.19) (2026-09-07)
+
+
+### Bug Fixes
+
+* block basic ADO tools from writing long-text content ([#73](https://github.com/a-teece/AdoMcpBridge/issues/73)) ([8e09e92](https://github.com/a-teece/AdoMcpBridge/commit/8e09e929d8e6822c56d97a2b7586f820cd2f4dab))
+* keep the container app warm to avoid MCP client timeouts ([#71](https://github.com/a-teece/AdoMcpBridge/issues/71)) ([e937d47](https://github.com/a-teece/AdoMcpBridge/commit/e937d47b4e8687c62d0619f4298f8c0b67726ebe))
+* pin patched SSH.NET to unblock NuGet audit-as-error ([#74](https://github.com/a-teece/AdoMcpBridge/issues/74)) ([b3db419](https://github.com/a-teece/AdoMcpBridge/commit/b3db419fd38a94845fa80c07382f8307d83d0be6))
+* require explicit format on write_field_from_slot ([#72](https://github.com/a-teece/AdoMcpBridge/issues/72)) ([0b2d966](https://github.com/a-teece/AdoMcpBridge/commit/0b2d96623ff59883171df018f9cf9ad6c3937001))
+
 ## [0.1.18](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.17...v0.1.18) (2026-08-02)
 
 
