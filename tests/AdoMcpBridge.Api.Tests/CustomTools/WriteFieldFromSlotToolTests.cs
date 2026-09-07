@@ -27,6 +27,7 @@ public class WriteFieldFromSlotToolTests
         string fieldRefName = "System.Description",
         string? sha256 = null,
         string? format = null,
+        bool formatIsJsonNull = false,
         string content = "Hello world")
     {
         var bytes = Encoding.UTF8.GetBytes(content);
@@ -41,28 +42,91 @@ public class WriteFieldFromSlotToolTests
             ["fieldRefName"] = fieldRefName,
             ["sha256"] = hash,
         };
-        if (format is not null) props["format"] = format;
+        if (formatIsJsonNull) props["format"] = null;
+        else if (format is not null) props["format"] = format;
 
         return JsonDocument.Parse(JsonSerializer.Serialize(props)).RootElement.Clone();
     }
 
     private static byte[] Utf8(string s) => Encoding.UTF8.GetBytes(s);
 
-    // ── html (default) ───────────────────────────────────────────────────────
+    // ── format is required and must be explicit ──────────────────────────────
 
     [Fact]
-    public async Task Html_IsDefaultWhenFormatParamOmitted()
+    public async Task ReturnsError_WhenFormatParamOmitted()
+    {
+        var result = await CreateTool().InvokeAsync(Args(content: "<p>Hello</p>"), CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("format is required");
+        result.Text.Should().Contain("no default is assumed");
+        await AssertNoSideEffects();
+    }
+
+    [Fact]
+    public async Task ReturnsError_WhenFormatIsJsonNull()
+    {
+        var result = await CreateTool().InvokeAsync(
+            Args(formatIsJsonNull: true, content: "<p>Hello</p>"), CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("format is required");
+        await AssertNoSideEffects();
+    }
+
+    [Fact]
+    public async Task ReturnsError_WhenFormatIsEmptyString()
+    {
+        var result = await CreateTool().InvokeAsync(
+            Args(format: "", content: "<p>Hello</p>"), CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("format is required");
+        await AssertNoSideEffects();
+    }
+
+    [Fact]
+    public async Task ReturnsError_WhenFormatIsUnrecognisedValue()
+    {
+        var result = await CreateTool().InvokeAsync(
+            Args(format: "htm", content: "<p>Hello</p>"), CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("format is required");
+        result.Text.Should().Contain("htm");
+        await AssertNoSideEffects();
+    }
+
+    private async Task AssertNoSideEffects()
+    {
+        await _blobs.DidNotReceive().ReadSlotAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _blobs.DidNotReceive().DeleteSlotAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _ado.DidNotReceive().PatchFieldAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(),
+            Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        await _ado.DidNotReceive().GetFieldAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    // ── html format ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Html_FormatIsCaseInsensitive()
     {
         const string html = "<p>Hello</p>";
         _blobs.ReadSlotAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Utf8(html));
         _ado.GetFieldAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(html);
 
-        var result = await CreateTool().InvokeAsync(Args(content: html), CancellationToken.None);
+        var result = await CreateTool().InvokeAsync(Args(content: html, format: "HTML"), CancellationToken.None);
 
         result.IsError.Should().BeFalse();
         JsonDocument.Parse(result.Text).RootElement
             .GetProperty("status").GetString().Should().Be("WRITTEN");
+        await _ado.Received(1).PatchFieldAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(),
+            html, fieldFormat: null, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -190,10 +254,13 @@ public class WriteFieldFromSlotToolTests
         _ado.GetFieldAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(md);
 
-        var result = await CreateTool().InvokeAsync(Args(content: md, format: "MARKDOWN"), CancellationToken.None);
+        var result = await CreateTool().InvokeAsync(Args(content: md, format: "Markdown"), CancellationToken.None);
 
         JsonDocument.Parse(result.Text).RootElement
             .GetProperty("status").GetString().Should().Be("MATCH");
+        await _ado.Received(1).PatchFieldAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(),
+            Arg.Any<string>(), fieldFormat: "Markdown", Arg.Any<CancellationToken>());
     }
 
     // ── SHA-256 validation ───────────────────────────────────────────────────
@@ -205,7 +272,7 @@ public class WriteFieldFromSlotToolTests
               .Returns(Utf8("actual content"));
 
         // sha256 is computed from "different content", not "actual content"
-        var args = Args(content: "different content");
+        var args = Args(content: "different content", format: "html");
         var result = await CreateTool().InvokeAsync(args, CancellationToken.None);
 
         result.IsError.Should().BeTrue();
@@ -220,7 +287,7 @@ public class WriteFieldFromSlotToolTests
         _blobs.ReadSlotAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
               .ThrowsAsync(new InvalidOperationException("blob not found"));
 
-        var result = await CreateTool().InvokeAsync(Args(), CancellationToken.None);
+        var result = await CreateTool().InvokeAsync(Args(format: "html"), CancellationToken.None);
 
         result.IsError.Should().BeTrue();
         result.Text.Should().Contain("Failed to read upload slot");
@@ -236,7 +303,7 @@ public class WriteFieldFromSlotToolTests
         _ado.GetFieldAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(content);
 
-        await CreateTool().InvokeAsync(Args(content: content), CancellationToken.None);
+        await CreateTool().InvokeAsync(Args(content: content, format: "html"), CancellationToken.None);
 
         await _blobs.Received(1).DeleteSlotAsync("slot-1", Arg.Any<CancellationToken>());
     }
