@@ -24,7 +24,8 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
     public string Description =>
         "Write operations: Transfers content from a previously created upload slot into an Azure DevOps " +
         "work-item long-text field. The bridge verifies the SHA-256 hash, writes the field, and re-fetches it. " +
-        "format=html (default): sends HTML as-is; returns {\"status\":\"WRITTEN\",\"charCount\":N}. " +
+        "format is REQUIRED and must be explicitly 'html' or 'markdown' — there is no default. " +
+        "format=html: sends HTML as-is; returns {\"status\":\"WRITTEN\",\"charCount\":N}. " +
         "format=markdown: entity-escapes content to survive ADO's ingest sanitiser (WI #95818, strips bare " +
         "<tag> sequences even in markdown mode), declares native Markdown storage via /multilineFieldsFormat, " +
         "verifies the round-trip and returns {\"status\":\"MATCH\",\"charCount\":N}. " +
@@ -42,21 +43,38 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
             workItemId = new { type = "integer", description = "Work-item numeric id." },
             fieldRefName = new { type = "string", description = "Field reference name (e.g. System.Description)." },
             sha256 = new { type = "string", description = "Lowercase hex SHA-256 of the raw UTF-8 bytes of the uploaded content." },
-            format = new { type = "string", @enum = new[] { "html", "markdown" }, description = "Content format. 'html' (default): HTML sent as-is. 'markdown': entity-escaped (ADO sanitiser strips bare <tag> even in markdown mode) then written with native Markdown storage declared — WARNING: irreversible per field." },
+            format = new { type = "string", @enum = new[] { "html", "markdown" }, description = "REQUIRED — no default is assumed. 'html': HTML sent as-is. 'markdown': entity-escaped (ADO sanitiser strips bare <tag> even in markdown mode) then written with native Markdown storage declared — WARNING: irreversible per field." },
         },
-        required = new[] { "slotId", "organization", "project", "workItemId", "fieldRefName", "sha256" },
+        required = new[] { "slotId", "organization", "project", "workItemId", "fieldRefName", "sha256", "format" },
     };
 
     public async Task<McpToolResult> InvokeAsync(JsonElement arguments, CancellationToken ct)
     {
+        // `format` must be stated explicitly. A JSON Schema `required` array is not enforced by
+        // every MCP client, so validate here — and validate first, so a bad request fails before
+        // the slot is read or any ADO call is made.
+        var hasFormat = arguments.TryGetProperty("format", out var fmtEl);
+        var formatValue = hasFormat && fmtEl.ValueKind == JsonValueKind.String ? fmtEl.GetString() : null;
+        var isMarkdown = string.Equals(formatValue, "markdown", StringComparison.OrdinalIgnoreCase);
+        var isHtml = string.Equals(formatValue, "html", StringComparison.OrdinalIgnoreCase);
+        if (!isMarkdown && !isHtml)
+        {
+            var received = !hasFormat
+                ? "(omitted)"
+                : fmtEl.ValueKind == JsonValueKind.Null ? "null" : $"'{fmtEl}'";
+            _logger.LogWarning(
+                "ado_bridge_write_field_from_slot: rejected — format={Received}", received);
+            return new McpToolResult(
+                "format is required and must be explicitly 'html' or 'markdown' — " +
+                $"no default is assumed. received={received}", IsError: true);
+        }
+
         var slotId = arguments.GetProperty("slotId").GetString()!;
         var org = arguments.GetProperty("organization").GetString()!;
         var project = arguments.GetProperty("project").GetString()!;
         var workItemId = arguments.GetProperty("workItemId").GetInt32();
         var fieldRef = arguments.GetProperty("fieldRefName").GetString()!;
         var expectedSha = arguments.GetProperty("sha256").GetString()!.ToLowerInvariant();
-        var isMarkdown = arguments.TryGetProperty("format", out var fmtEl) &&
-                         string.Equals(fmtEl.GetString(), "markdown", StringComparison.OrdinalIgnoreCase);
 
         _logger.LogInformation(
             "ado_bridge_write_field_from_slot: WI {Id} field {Field} slot {Slot} format={Format}",
