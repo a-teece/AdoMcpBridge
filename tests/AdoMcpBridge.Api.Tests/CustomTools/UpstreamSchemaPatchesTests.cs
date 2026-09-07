@@ -99,6 +99,57 @@ public sealed class UpstreamSchemaPatchesTests
         fields.GetProperty("items").GetProperty("type").GetString().Should().Be("string");
     }
 
+    // ── Native-tool steering in the basic tools' descriptions ────────────────
+
+    private static JsonElement PatchAndFindTool(string responseJson, string toolName)
+    {
+        var patched = JsonRpcHelpers.InjectToolsIntoListResponse(Encoding.UTF8.GetBytes(responseJson), []);
+        using var doc = JsonDocument.Parse(patched);
+        return doc.RootElement.GetProperty("result").GetProperty("tools")
+            .EnumerateArray().First(t => t.GetProperty("name").GetString() == toolName).Clone();
+    }
+
+    [Fact]
+    public void Steers_wit_work_item_write_towards_the_native_slot_tools()
+    {
+        var tool = PatchAndFindTool(UnpatchedToolsListResponse, "wit_work_item_write");
+
+        var description = tool.GetProperty("description").GetString();
+        description.Should().Contain("ado_bridge_create_upload_slot")
+            .And.Contain("ado_bridge_write_field_from_slot")
+            .And.Contain("System.Description")
+            .And.Contain("Write operations on work items."); // upstream's own text survives
+    }
+
+    [Fact]
+    public void Steers_wit_work_item_comment_write_towards_the_native_comment_tool()
+    {
+        const string withCommentWrite =
+            """
+            {"jsonrpc":"2.0","id":1,"result":{"tools":[
+              {
+                "name":"wit_work_item_comment_write",
+                "description":"Add a comment to a work item.",
+                "inputSchema":{"type":"object","properties":{"comment":{"type":"string"}}}
+              }
+            ]}}
+            """;
+
+        var tool = PatchAndFindTool(withCommentWrite, "wit_work_item_comment_write");
+
+        var description = tool.GetProperty("description").GetString();
+        description.Should().Contain("ado_bridge_add_comment")
+            .And.Contain("Add a comment to a work item."); // upstream's own text survives
+    }
+
+    [Fact]
+    public void Leaves_other_tools_descriptions_untouched()
+    {
+        var tool = PatchAndFindTool(UnpatchedToolsListResponse, "some_other_tool");
+
+        tool.GetProperty("description").GetString().Should().Be("Untouched.");
+    }
+
     [Fact]
     public void Patches_fields_inside_an_sse_tools_list_response()
     {

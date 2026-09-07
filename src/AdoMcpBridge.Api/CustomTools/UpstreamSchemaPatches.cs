@@ -26,6 +26,9 @@ internal static class UpstreamSchemaPatches
         foreach (var toolNode in toolsArray)
         {
             if (toolNode is not JsonObject tool) continue;
+
+            PrependNativeToolGuidance(tool);
+
             if (tool["name"]?.GetValue<string>() != WitWorkItemWriteArgumentNormalizer.ToolName) continue;
 
             if (tool["inputSchema"]?["properties"]?["fields"] is not JsonObject fields) continue;
@@ -44,5 +47,32 @@ internal static class UpstreamSchemaPatches
                 ["additionalProperties"] = true,
             };
         }
+    }
+
+    /// <summary>
+    /// Steers callers off the basic write tools for content the bridge has native tools for:
+    /// prefixes upstream's own description for <c>wit_work_item_write</c> and
+    /// <c>wit_work_item_comment_write</c> with the guardrail wording, keeping upstream's text
+    /// after it so the tool's real parameters stay documented. This is the advisory half of
+    /// the guardrail — the enforcing half rejects the calls anyway (see
+    /// <see cref="BasicToolGuardrails"/>) — so a client that never re-reads tools/list still
+    /// cannot corrupt a long-text field or comment.
+    ///
+    /// Idempotent: a description already carrying the prefix is left alone.
+    /// </summary>
+    private static void PrependNativeToolGuidance(JsonObject tool)
+    {
+        var prefix = tool["name"]?.GetValue<string>() switch
+        {
+            WitWorkItemWriteArgumentNormalizer.ToolName => BasicToolGuardrails.WitWorkItemWriteDescriptionPrefix,
+            BasicToolGuardrails.CommentWriteToolName => BasicToolGuardrails.CommentWriteDescriptionPrefix,
+            _ => null,
+        };
+        if (prefix is null) return;
+
+        var existing = tool["description"]?.GetValue<string>() ?? string.Empty;
+        if (existing.StartsWith(prefix, StringComparison.Ordinal)) return;
+
+        tool["description"] = prefix + existing;
     }
 }

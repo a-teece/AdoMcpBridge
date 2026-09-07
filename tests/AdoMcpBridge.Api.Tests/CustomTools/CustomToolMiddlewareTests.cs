@@ -211,4 +211,74 @@ public sealed class CustomToolMiddlewareTests
         error.GetProperty("code").GetInt32().Should().Be(-32602);
         error.GetProperty("message").GetString().Should().Contain("fields");
     }
+
+    [Fact]
+    public async Task Rejects_long_text_field_write_via_wit_work_item_write_without_forwarding()
+    {
+        var ctx = ContextForWitWorkItemWriteCall(
+            "{\"action\":\"update\",\"fields\":[{\"name\":\"System.Description\",\"value\":\"<p>x</p>\"}]}");
+
+        var nextCalled = false;
+        var mw = new CustomToolMiddleware(
+            _ => { nextCalled = true; return Task.CompletedTask; },
+            Array.Empty<ICustomMcpTool>(),
+            new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
+
+        await mw.InvokeAsync(ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>());
+
+        nextCalled.Should().BeFalse();
+
+        ctx.Response.Body.Seek(0, SeekOrigin.Begin);
+        var responseText = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
+        using var doc = JsonDocument.Parse(responseText);
+        var error = doc.RootElement.GetProperty("error");
+        error.GetProperty("code").GetInt32().Should().Be(-32602);
+        error.GetProperty("message").GetString().Should()
+            .Contain("System.Description")
+            .And.Contain("ado_bridge_create_upload_slot")
+            .And.Contain("ado_bridge_write_field_from_slot");
+    }
+
+    private static DefaultHttpContext ContextForCommentWriteCall(string argumentsJson)
+    {
+        var body =
+            "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\"," +
+            "\"params\":{\"name\":\"wit_work_item_comment_write\",\"arguments\":" + argumentsJson + "}}";
+        var bytes = Encoding.UTF8.GetBytes(body);
+
+        var ctx = new DefaultHttpContext();
+        ctx.Request.Method = HttpMethods.Post;
+        ctx.Request.ContentType = "application/json";
+        ctx.Request.ContentLength = bytes.Length;
+        ctx.Request.Body = new MemoryStream(bytes);
+        ctx.Response.Body = new MemoryStream();
+        return ctx;
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"project\":\"p\",\"workItemId\":1,\"comment\":\"hi\"}")]
+    [InlineData("{\"project\":\"p\",\"workItemId\":1,\"comment\":\"\"}")]
+    public async Task Always_rejects_wit_work_item_comment_write_without_forwarding(string argumentsJson)
+    {
+        var ctx = ContextForCommentWriteCall(argumentsJson);
+
+        var nextCalled = false;
+        var mw = new CustomToolMiddleware(
+            _ => { nextCalled = true; return Task.CompletedTask; },
+            Array.Empty<ICustomMcpTool>(),
+            new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
+
+        await mw.InvokeAsync(ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>());
+
+        nextCalled.Should().BeFalse();
+
+        ctx.Response.Body.Seek(0, SeekOrigin.Begin);
+        var responseText = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
+        using var doc = JsonDocument.Parse(responseText);
+        doc.RootElement.GetProperty("id").GetInt32().Should().Be(7);
+        var error = doc.RootElement.GetProperty("error");
+        error.GetProperty("code").GetInt32().Should().Be(-32602);
+        error.GetProperty("message").GetString().Should().Contain("ado_bridge_add_comment");
+    }
 }

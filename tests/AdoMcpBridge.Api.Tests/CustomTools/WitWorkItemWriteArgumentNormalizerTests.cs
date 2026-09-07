@@ -262,4 +262,144 @@ public sealed class WitWorkItemWriteArgumentNormalizerTests
 
         act.Should().NotThrow();
     }
+
+    // ── Long-text field guard (upstream mangles formatting — use the native tools) ──
+
+    [Theory]
+    [InlineData("System.Description")]
+    [InlineData("Microsoft.VSTS.TCM.ReproSteps")]
+    [InlineData("Microsoft.VSTS.Common.AcceptanceCriteria")]
+    [InlineData("Microsoft.VSTS.TCM.SystemInfo")]
+    [InlineData("Microsoft.VSTS.CMMI.Symptom")]
+    [InlineData("Microsoft.VSTS.CMMI.RootCause")]
+    [InlineData("Microsoft.VSTS.CMMI.HowFound")]
+    [InlineData("Microsoft.VSTS.CMMI.Justification")]
+    public void Long_text_field_write_is_rejected_naming_the_native_slot_tools(string fieldRefName)
+    {
+        using var doc = BuildRequest(
+            "{\"action\":\"update\",\"fields\":[{\"name\":\"" + fieldRefName + "\",\"value\":\"<p>text</p>\"}]}");
+
+        var act = () => WitWorkItemWriteArgumentNormalizer.NormalizeRequestBody(doc.RootElement);
+
+        act.Should().Throw<WitWorkItemWriteArgumentException>()
+            .WithMessage("*" + fieldRefName + "*")
+            .WithMessage("*ado_bridge_create_upload_slot*")
+            .WithMessage("*ado_bridge_write_field_from_slot*");
+    }
+
+    [Theory]
+    [InlineData("System.Description")]
+    [InlineData("Microsoft.VSTS.TCM.ReproSteps")]
+    [InlineData("Microsoft.VSTS.Common.AcceptanceCriteria")]
+    [InlineData("Microsoft.VSTS.TCM.SystemInfo")]
+    [InlineData("Microsoft.VSTS.CMMI.Symptom")]
+    [InlineData("Microsoft.VSTS.CMMI.RootCause")]
+    [InlineData("Microsoft.VSTS.CMMI.HowFound")]
+    [InlineData("Microsoft.VSTS.CMMI.Justification")]
+    public void Long_text_field_write_is_rejected_via_json_patch_path(string fieldRefName)
+    {
+        using var doc = BuildRequest(
+            "{\"action\":\"update_batch\",\"batchUpdates\":[{\"id\":1,\"op\":\"add\",\"path\":\"/fields/" +
+            fieldRefName + "\",\"value\":\"<p>text</p>\"}]}");
+
+        var act = () => WitWorkItemWriteArgumentNormalizer.NormalizeRequestBody(doc.RootElement);
+
+        act.Should().Throw<WitWorkItemWriteArgumentException>()
+            .WithMessage("*" + fieldRefName + "*")
+            .WithMessage("*ado_bridge_write_field_from_slot*");
+    }
+
+    [Fact]
+    public void Long_text_field_is_rejected_case_insensitively()
+    {
+        using var doc = BuildRequest(
+            "{\"action\":\"update\",\"fields\":[{\"name\":\"system.DESCRIPTION\",\"value\":\"text\"}]}");
+
+        var act = () => WitWorkItemWriteArgumentNormalizer.NormalizeRequestBody(doc.RootElement);
+
+        act.Should().Throw<WitWorkItemWriteArgumentException>()
+            .WithMessage("*System.Description*");
+    }
+
+    [Fact]
+    public void Long_text_field_is_rejected_case_insensitively_via_json_patch_path()
+    {
+        using var doc = BuildRequest(
+            "{\"action\":\"update\",\"updates\":[{\"op\":\"add\",\"path\":\"/FIELDS/system.description\",\"value\":\"text\"}]}");
+
+        var act = () => WitWorkItemWriteArgumentNormalizer.NormalizeRequestBody(doc.RootElement);
+
+        act.Should().Throw<WitWorkItemWriteArgumentException>()
+            .WithMessage("*System.Description*");
+    }
+
+    [Fact]
+    public void Long_text_field_is_rejected_even_when_hidden_in_a_json_encoded_string()
+    {
+        var arrayText = JsonSerializer.Serialize(new[] { new { name = "System.Description", value = "text" } });
+        using var doc = BuildRequest(
+            "{\"action\":\"update\",\"fields\":" + JsonSerializer.Serialize(arrayText) + "}");
+
+        var act = () => WitWorkItemWriteArgumentNormalizer.NormalizeRequestBody(doc.RootElement);
+
+        act.Should().Throw<WitWorkItemWriteArgumentException>()
+            .WithMessage("*System.Description*");
+    }
+
+    [Fact]
+    public void Long_text_field_is_rejected_when_supplied_as_a_field_map()
+    {
+        using var doc = BuildRequest(
+            "{\"action\":\"update\",\"fields\":{\"System.Description\":\"text\"}}");
+
+        var act = () => WitWorkItemWriteArgumentNormalizer.NormalizeRequestBody(doc.RootElement);
+
+        act.Should().Throw<WitWorkItemWriteArgumentException>()
+            .WithMessage("*System.Description*");
+    }
+
+    [Fact]
+    public void Clearing_a_long_text_field_to_an_empty_string_is_allowed()
+    {
+        using var doc = BuildRequest(
+            "{\"action\":\"update\",\"fields\":[{\"name\":\"System.Description\",\"value\":\"\"}]}");
+
+        var act = () => WitWorkItemWriteArgumentNormalizer.NormalizeRequestBody(doc.RootElement);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Clearing_a_long_text_field_to_null_is_allowed()
+    {
+        using var doc = BuildRequest(
+            "{\"action\":\"update\",\"fields\":[{\"name\":\"System.Description\",\"value\":null}]}");
+
+        var act = () => WitWorkItemWriteArgumentNormalizer.NormalizeRequestBody(doc.RootElement);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Removing_a_long_text_field_by_json_patch_without_a_value_is_allowed()
+    {
+        using var doc = BuildRequest(
+            "{\"action\":\"update\",\"updates\":[{\"op\":\"remove\",\"path\":\"/fields/System.Description\"}]}");
+
+        var act = () => WitWorkItemWriteArgumentNormalizer.NormalizeRequestBody(doc.RootElement);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Short_text_fields_are_unaffected_by_the_long_text_guard()
+    {
+        using var doc = BuildRequest(
+            "{\"action\":\"update\",\"fields\":[{\"name\":\"System.Title\",\"value\":\"x\"}," +
+            "{\"name\":\"System.State\",\"value\":\"Active\"}]}");
+
+        var result = WitWorkItemWriteArgumentNormalizer.NormalizeRequestBody(doc.RootElement);
+
+        result.Should().BeNull();
+    }
 }
