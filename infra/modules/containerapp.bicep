@@ -175,7 +175,11 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
         }
       ]
       scale: {
-        minReplicas: 0
+        // minReplicas: 0 lets the app scale to zero between requests, but Container
+        // Apps' cold start then exceeds MCP clients' connection timeout, dropping the
+        // bridge offline until the next request wakes it. Keep one replica warm at all
+        // times and accept the always-on compute cost instead.
+        minReplicas: 1
         maxReplicas: 5
         rules: [
           {
