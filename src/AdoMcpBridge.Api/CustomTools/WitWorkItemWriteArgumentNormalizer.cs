@@ -58,6 +58,7 @@ internal static class WitWorkItemWriteArgumentNormalizer
 
             JsonArray normalized = NormalizeArrayParameter(name, value);
             RejectParentFieldWrite(normalized);
+            RejectLongTextFieldWrite(normalized);
             if (!ReferenceEquals(normalized, value))
             {
                 arguments[name] = normalized;
@@ -88,6 +89,42 @@ internal static class WitWorkItemWriteArgumentNormalizer
                 throw new WitWorkItemWriteArgumentException(ParentWriteGuidance);
             }
         }
+    }
+
+    /// <summary>
+    /// Fails the write if any entry sets a long-text field (see
+    /// <see cref="BasicToolGuardrails.LongTextFieldRefNames"/>) to a non-empty value —
+    /// either the name/value shape or the JSON-Patch shape — because upstream writes those
+    /// bodies through with no format handling and corrupts them. A write that clears the
+    /// field (null, empty/whitespace value, or a patch carrying no value at all) has no
+    /// formatting to corrupt and is allowed. Runs against the already-normalised array so a
+    /// field hidden inside a JSON-encoded string argument is still caught.
+    /// </summary>
+    /// <exception cref="WitWorkItemWriteArgumentException">A long-text field write was found.</exception>
+    private static void RejectLongTextFieldWrite(JsonArray array)
+    {
+        foreach (var item in array)
+        {
+            if (item is not JsonObject obj) continue;
+            if (!HasNonEmptyValue(obj)) continue;
+
+            foreach (var fieldRefName in BasicToolGuardrails.LongTextFieldRefNames)
+            {
+                if (StringPropertyEquals(obj, "name", fieldRefName) ||
+                    StringPropertyEquals(obj, "path", "/fields/" + fieldRefName))
+                {
+                    throw new WitWorkItemWriteArgumentException(
+                        BasicToolGuardrails.LongTextFieldRejection(fieldRefName));
+                }
+            }
+        }
+    }
+
+    private static bool HasNonEmptyValue(JsonObject obj)
+    {
+        if (!obj.TryGetPropertyValue("value", out var node) || node is null) return false;
+        if (node is JsonValue value && value.TryGetValue<string>(out var text)) return !string.IsNullOrWhiteSpace(text);
+        return true;
     }
 
     private static bool StringPropertyEquals(JsonObject obj, string property, string expected)

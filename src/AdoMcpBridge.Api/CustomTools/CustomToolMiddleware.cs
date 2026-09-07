@@ -107,6 +107,21 @@ internal sealed class CustomToolMiddleware
                     return;
                 }
 
+                // ado_bridge_add_comment fully replaces upstream's comment write (it handles
+                // both small inline bodies and large slot-uploaded ones) and, unlike upstream,
+                // applies format detection/escaping. Upstream's tool has no remaining
+                // legitimate use here and corrupts every body it writes, so block it outright
+                // rather than forward it.
+                if (toolName == BasicToolGuardrails.CommentWriteToolName)
+                {
+                    _logger.LogInformation(
+                        "Rejecting {Tool} — callers must use ado_bridge_add_comment", toolName);
+                    await JsonRpcHelpers.WriteErrorAsync(
+                        context.Response, id, -32602, BasicToolGuardrails.CommentWriteRejection,
+                        context.RequestAborted);
+                    return;
+                }
+
                 if (toolName == WitWorkItemWriteArgumentNormalizer.ToolName &&
                     await TryForwardNormalizedWitWorkItemWriteAsync(context, root, id, notify, sessionId))
                 {
