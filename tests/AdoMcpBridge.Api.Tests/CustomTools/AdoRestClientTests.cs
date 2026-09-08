@@ -620,4 +620,85 @@ public class AdoRestClientTests
 
         await act.Should().ThrowAsync<HttpRequestException>();
     }
+
+    // ── CreateAttachmentAsync ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CreateAttachmentAsync_posts_octet_stream_and_returns_the_ref()
+    {
+        var (client, handler) = CreateClient(Json(
+            "{\"id\":\"a5cedde4-2dd5-4fcf-befe-fd0977dd3433\"," +
+            "\"url\":\"https://dev.azure.com/fabrikam/_apis/wit/attachments/a5cedde4-2dd5-4fcf-befe-fd0977dd3433?fileName=pic.png\"}",
+            HttpStatusCode.Created));
+
+        var result = await client.CreateAttachmentAsync("org", "proj", "pic.png", [1, 2, 3]);
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Post);
+        handler.LastRequest.Headers.Authorization!.Scheme.Should().Be("Bearer");
+        handler.LastRequest.Headers.Authorization.Parameter.Should().Be(CallerToken);
+        handler.LastRequest.RequestUri!.ToString()
+            .Should().Contain("/proj/_apis/wit/attachments")
+            .And.Contain("fileName=pic.png");
+        handler.LastContentType.Should().Be("application/octet-stream");
+        result.Id.Should().Be("a5cedde4-2dd5-4fcf-befe-fd0977dd3433");
+        result.Url.Should().Contain("/_apis/wit/attachments/a5cedde4-2dd5-4fcf-befe-fd0977dd3433");
+    }
+
+    [Fact]
+    public async Task CreateAttachmentAsync_throws_on_non_success()
+    {
+        var (client, _) = CreateClient(
+            new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = new StringContent("bad") });
+
+        var act = () => client.CreateAttachmentAsync("org", "proj", "f", [1]);
+
+        await act.Should().ThrowAsync<HttpRequestException>();
+    }
+
+    // ── AddWorkItemAttachmentAsync ───────────────────────────────────────────
+
+    [Fact]
+    public async Task AddWorkItemAttachmentAsync_patches_an_attached_file_relation_with_comment()
+    {
+        var (client, handler) = CreateClient(Json("{}"));
+
+        await client.AddWorkItemAttachmentAsync(
+            "org", "proj", 42, "https://dev.azure.com/org/_apis/wit/attachments/g", "see attached");
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Patch);
+        handler.LastContentType.Should().Be("application/json-patch+json");
+        handler.LastRequest.RequestUri!.ToString().Should().Contain("/proj/_apis/wit/workitems/42");
+
+        using var doc = JsonDocument.Parse(handler.LastBody!);
+        var op = doc.RootElement[0];
+        op.GetProperty("op").GetString().Should().Be("add");
+        op.GetProperty("path").GetString().Should().Be("/relations/-");
+        var value = op.GetProperty("value");
+        value.GetProperty("rel").GetString().Should().Be("AttachedFile");
+        value.GetProperty("url").GetString().Should().Be("https://dev.azure.com/org/_apis/wit/attachments/g");
+        value.GetProperty("attributes").GetProperty("comment").GetString().Should().Be("see attached");
+    }
+
+    [Fact]
+    public async Task AddWorkItemAttachmentAsync_omits_comment_when_not_supplied()
+    {
+        var (client, handler) = CreateClient(Json("{}"));
+
+        await client.AddWorkItemAttachmentAsync("org", "proj", 42, "https://x/attachments/g", comment: null);
+
+        using var doc = JsonDocument.Parse(handler.LastBody!);
+        var attributes = doc.RootElement[0].GetProperty("value").GetProperty("attributes");
+        attributes.TryGetProperty("comment", out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AddWorkItemAttachmentAsync_throws_on_non_success()
+    {
+        var (client, _) = CreateClient(
+            new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("no wi") });
+
+        var act = () => client.AddWorkItemAttachmentAsync("org", "proj", 42, "https://x/a/g", null);
+
+        await act.Should().ThrowAsync<HttpRequestException>();
+    }
 }
