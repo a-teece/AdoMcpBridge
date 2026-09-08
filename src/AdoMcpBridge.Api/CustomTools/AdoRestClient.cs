@@ -35,6 +35,16 @@ public interface IAdoRestClient
         string org, string project, int id, CancellationToken ct = default);
 
     /// <summary>
+    /// Downloads a work-item attachment's raw bytes from the ADO attachment store by its
+    /// id (a GUID). <paramref name="fileName"/> is appended when supplied so ADO serves the
+    /// original name. The returned content type is taken from ADO's response header
+    /// (falling back to <c>application/octet-stream</c>).
+    /// </summary>
+    Task<AdoAttachmentContent> DownloadAttachmentAsync(
+        string org, string project, string attachmentId, string? fileName = null,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Returns all fields for each of the requested work items in a single
     /// batch call. The order of results matches the order of <paramref name="ids"/>.
     /// </summary>
@@ -111,6 +121,9 @@ public interface IAdoRestClient
 
 /// <summary>A single approve/reject instruction for <see cref="IAdoRestClient.UpdateApprovalsAsync"/>.</summary>
 public sealed record ApprovalUpdate(string ApprovalId, string Status, string? Comment);
+
+/// <summary>Raw bytes of a downloaded attachment plus the MIME type ADO reported for it.</summary>
+public sealed record AdoAttachmentContent(byte[] Content, string ContentType);
 
 /// <summary>
 /// Carries the Azure DevOps error <c>message</c> from a failed WIQL execution so
@@ -218,6 +231,32 @@ internal sealed class AdoRestClient : IAdoRestClient
         var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         using var doc = JsonDocument.Parse(json);
         return doc.RootElement.Clone();
+    }
+
+    public async Task<AdoAttachmentContent> DownloadAttachmentAsync(
+        string org, string project, string attachmentId, string? fileName = null,
+        CancellationToken ct = default)
+    {
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
+                  $"/{Uri.EscapeDataString(project)}/_apis/wit/attachments/{Uri.EscapeDataString(attachmentId)}" +
+                  $"?download=true&api-version=7.1";
+        if (!string.IsNullOrEmpty(fileName))
+            url += $"&fileName={Uri.EscapeDataString(fileName)}";
+
+        using var req = BuildRequest(HttpMethod.Get, url, body: null);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            _logger.LogWarning("ADO GET attachment {AttachmentId} in {Org}/{Project} returned {Status}: {Body}",
+                attachmentId, org, project, (int)res.StatusCode, err);
+            res.EnsureSuccessStatusCode();
+        }
+
+        var bytes = await res.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+        var contentType = res.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+        return new AdoAttachmentContent(bytes, contentType);
     }
 
     public async Task<IReadOnlyList<JsonElement>> GetWorkItemsBatchAsync(

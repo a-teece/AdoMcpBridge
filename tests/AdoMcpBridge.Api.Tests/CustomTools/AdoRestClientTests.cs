@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using AdoMcpBridge.Api.CustomTools;
@@ -558,5 +559,65 @@ public class AdoRestClientTests
 
         (await act.Should().ThrowAsync<AdoWiqlQueryException>())
             .Which.Message.Should().Contain("500");
+    }
+
+    // ── DownloadAttachmentAsync ──────────────────────────────────────────────
+
+    private static HttpResponseMessage Binary(byte[] bytes, string? contentType)
+    {
+        var res = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(bytes) };
+        if (contentType is not null)
+            res.Content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        return res;
+    }
+
+    [Fact]
+    public async Task DownloadAttachmentAsync_gets_by_id_with_download_flag_and_filename()
+    {
+        var bytes = new byte[] { 1, 2, 3, 4 };
+        var (client, handler) = CreateClient(Binary(bytes, "image/png"));
+
+        var result = await client.DownloadAttachmentAsync("org", "proj", "the-guid", "pic.png");
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Get);
+        handler.LastRequest.Headers.Authorization!.Scheme.Should().Be("Bearer");
+        handler.LastRequest.Headers.Authorization.Parameter.Should().Be(CallerToken);
+        handler.LastRequest.RequestUri!.ToString()
+            .Should().Contain("/proj/_apis/wit/attachments/the-guid")
+            .And.Contain("download=true")
+            .And.Contain("fileName=pic.png");
+        result.Content.Should().Equal(bytes);
+        result.ContentType.Should().Be("image/png");
+    }
+
+    [Fact]
+    public async Task DownloadAttachmentAsync_omits_filename_when_not_supplied()
+    {
+        var (client, handler) = CreateClient(Binary([9], "text/plain"));
+
+        await client.DownloadAttachmentAsync("org", "proj", "the-guid");
+
+        handler.LastRequest!.RequestUri!.ToString().Should().NotContain("fileName=");
+    }
+
+    [Fact]
+    public async Task DownloadAttachmentAsync_defaults_content_type_when_absent()
+    {
+        var (client, _) = CreateClient(Binary([9], contentType: null));
+
+        var result = await client.DownloadAttachmentAsync("org", "proj", "the-guid");
+
+        result.ContentType.Should().Be("application/octet-stream");
+    }
+
+    [Fact]
+    public async Task DownloadAttachmentAsync_throws_on_non_success()
+    {
+        var (client, _) = CreateClient(
+            new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("missing") });
+
+        var act = () => client.DownloadAttachmentAsync("org", "proj", "the-guid");
+
+        await act.Should().ThrowAsync<HttpRequestException>();
     }
 }
