@@ -58,6 +58,7 @@ builder.Services.AddSingleton<IMcpSessionRegistry, McpSessionRegistry>();
 // Custom MCP tools — registered as ICustomMcpTool so the middleware can
 // resolve them all at once via IEnumerable<ICustomMcpTool>.
 builder.Services.AddSingleton<ICustomMcpTool, DownloadFieldTool>();
+builder.Services.AddSingleton<ICustomMcpTool, DownloadAttachmentTool>();
 builder.Services.AddSingleton<ICustomMcpTool, CreateUploadSlotTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WriteFieldFromSlotTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WitGetSlimTool>();

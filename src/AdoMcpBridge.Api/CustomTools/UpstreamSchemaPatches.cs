@@ -66,6 +66,7 @@ internal static class UpstreamSchemaPatches
         {
             WitWorkItemWriteArgumentNormalizer.ToolName => BasicToolGuardrails.WitWorkItemWriteDescriptionPrefix,
             BasicToolGuardrails.CommentWriteToolName => BasicToolGuardrails.CommentWriteDescriptionPrefix,
+            BasicToolGuardrails.AttachmentDownloadToolName => BasicToolGuardrails.AttachmentDownloadDescriptionPrefix,
             _ => null,
         };
         if (prefix is null) return;

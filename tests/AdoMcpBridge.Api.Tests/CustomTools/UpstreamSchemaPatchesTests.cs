@@ -143,6 +143,27 @@ public sealed class UpstreamSchemaPatchesTests
     }
 
     [Fact]
+    public void Steers_wit_work_item_attachment_towards_the_native_download_tool()
+    {
+        const string withAttachment =
+            """
+            {"jsonrpc":"2.0","id":1,"result":{"tools":[
+              {
+                "name":"wit_work_item_attachment",
+                "description":"Download a work item attachment by ID.",
+                "inputSchema":{"type":"object","properties":{"id":{"type":"string"}}}
+              }
+            ]}}
+            """;
+
+        var tool = PatchAndFindTool(withAttachment, "wit_work_item_attachment");
+
+        var description = tool.GetProperty("description").GetString();
+        description.Should().Contain("ado_bridge_download_attachment")
+            .And.Contain("Download a work item attachment by ID."); // upstream's own text survives
+    }
+
+    [Fact]
     public void Leaves_other_tools_descriptions_untouched()
     {
         var tool = PatchAndFindTool(UnpatchedToolsListResponse, "some_other_tool");

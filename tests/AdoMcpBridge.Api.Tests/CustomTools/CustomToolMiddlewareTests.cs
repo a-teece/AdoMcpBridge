@@ -281,4 +281,28 @@ public sealed class CustomToolMiddlewareTests
         error.GetProperty("code").GetInt32().Should().Be(-32602);
         error.GetProperty("message").GetString().Should().Contain("ado_bridge_add_comment");
     }
+
+    [Fact]
+    public async Task Always_rejects_wit_work_item_attachment_without_forwarding()
+    {
+        var ctx = ContextForToolCall("wit_work_item_attachment");
+
+        var nextCalled = false;
+        var mw = new CustomToolMiddleware(
+            _ => { nextCalled = true; return Task.CompletedTask; },
+            Array.Empty<ICustomMcpTool>(),
+            new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
+
+        await mw.InvokeAsync(ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>());
+
+        nextCalled.Should().BeFalse();
+
+        ctx.Response.Body.Seek(0, SeekOrigin.Begin);
+        var responseText = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
+        using var doc = JsonDocument.Parse(responseText);
+        doc.RootElement.GetProperty("id").GetInt32().Should().Be(1);
+        var error = doc.RootElement.GetProperty("error");
+        error.GetProperty("code").GetInt32().Should().Be(-32602);
+        error.GetProperty("message").GetString().Should().Contain("ado_bridge_download_attachment");
+    }
 }

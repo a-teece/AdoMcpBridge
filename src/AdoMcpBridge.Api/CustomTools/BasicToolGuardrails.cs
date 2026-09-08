@@ -12,10 +12,17 @@ namespace AdoMcpBridge.Api.CustomTools;
 /// steered in the tools/list descriptions (<see cref="UpstreamSchemaPatches"/>), enforced
 /// for field writes (<see cref="WitWorkItemWriteArgumentNormalizer"/>) and for comment
 /// writes (<c>CustomToolMiddleware</c>).
+///
+/// The same shape guards <c>wit_work_item_attachment</c>: upstream returns the whole
+/// attachment as base64 inline, which overflows the model on any multi-MB file, so the bridge
+/// steers and rejects it in favour of the native <c>ado_bridge_download_attachment</c> (which
+/// returns a read-only download URL instead of routing the bytes through the model).
 /// </summary>
 internal static class BasicToolGuardrails
 {
     public const string CommentWriteToolName = "wit_work_item_comment_write";
+
+    public const string AttachmentDownloadToolName = "wit_work_item_attachment";
 
     /// <summary>
     /// Long-text (HTML-bodied) work-item fields. Any non-empty write to one of these
@@ -49,6 +56,13 @@ internal static class BasicToolGuardrails
         "bodies, or via 'ado_bridge_create_upload_slot' + slotId/sha256 for large ones) and is a " +
         "complete replacement.";
 
+    public const string AttachmentDownloadRejection =
+        "wit_work_item_attachment is not available through this bridge — it returns the whole " +
+        "attachment as base64 inline, which overflows the model on any sizeable file. Use the native " +
+        "tool 'ado_bridge_download_attachment' instead: it takes the same attachment (by 'id' or " +
+        "'url') and returns a short-lived read-only download URL you fetch directly, so the bytes " +
+        "never route through the model.";
+
     /// <summary>
     /// Prefixed onto upstream's own <c>wit_work_item_write</c> description at tools/list so the
     /// steering is read before the tool is chosen, not only after a call is rejected.
@@ -65,4 +79,10 @@ internal static class BasicToolGuardrails
         "IMPORTANT (ado-mcp-bridge): do NOT use this tool — the bridge rejects every call to it " +
         "because it corrupts comment formatting. Use the native tool 'ado_bridge_add_comment' " +
         "instead, for comment bodies of any size. ";
+
+    public static readonly string AttachmentDownloadDescriptionPrefix =
+        "IMPORTANT (ado-mcp-bridge): do NOT use this tool — the bridge rejects every call to it " +
+        "because it returns the attachment as base64 inline and overflows the model. Use the native " +
+        "tool 'ado_bridge_download_attachment' instead: it returns a read-only download URL rather " +
+        "than the bytes themselves. ";
 }

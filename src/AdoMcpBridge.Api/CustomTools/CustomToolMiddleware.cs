@@ -122,6 +122,19 @@ internal sealed class CustomToolMiddleware
                     return;
                 }
 
+                // wit_work_item_attachment returns the whole attachment as base64 inline, which
+                // overflows the model on any sizeable file. ado_bridge_download_attachment is a
+                // complete replacement (it returns a read-only download URL), so block it outright.
+                if (toolName == BasicToolGuardrails.AttachmentDownloadToolName)
+                {
+                    _logger.LogInformation(
+                        "Rejecting {Tool} — callers must use ado_bridge_download_attachment", toolName);
+                    await JsonRpcHelpers.WriteErrorAsync(
+                        context.Response, id, -32602, BasicToolGuardrails.AttachmentDownloadRejection,
+                        context.RequestAborted);
+                    return;
+                }
+
                 if (toolName == WitWorkItemWriteArgumentNormalizer.ToolName &&
                     await TryForwardNormalizedWitWorkItemWriteAsync(context, root, id, notify, sessionId))
                 {
