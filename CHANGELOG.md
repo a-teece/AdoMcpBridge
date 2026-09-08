@@ -6,6 +6,14 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.20](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.19...v0.1.20) (2026-09-08)
+
+
+### Features
+
+* add attachment upload via slots with optional work-item linking ([#78](https://github.com/a-teece/AdoMcpBridge/issues/78)) ([1a2aa08](https://github.com/a-teece/AdoMcpBridge/commit/1a2aa080fe3478610c22bb933a14c3fd5a39248f))
+* replace base64 attachment download with a read-slot native tool ([#76](https://github.com/a-teece/AdoMcpBridge/issues/76)) ([91ec0fd](https://github.com/a-teece/AdoMcpBridge/commit/91ec0fdb676c17bb212e89e0559d6ce8a4f8e7a4))
+
 ## [0.1.19](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.18...v0.1.19) (2026-09-07)
 
 
