@@ -45,6 +45,23 @@ public interface IAdoRestClient
         CancellationToken ct = default);
 
     /// <summary>
+    /// Uploads raw bytes to the ADO attachment store (simple upload — fine within the 60&#160;MB
+    /// work-item attachment cap) and returns the created attachment's id and url.
+    /// <paramref name="fileName"/> is stored as the attachment's name.
+    /// </summary>
+    Task<AdoAttachmentRef> CreateAttachmentAsync(
+        string org, string project, string fileName, byte[] content, CancellationToken ct = default);
+
+    /// <summary>
+    /// Links an already-uploaded attachment to a work item by adding an <c>AttachedFile</c>
+    /// relation pointing at <paramref name="attachmentUrl"/>. <paramref name="comment"/> is
+    /// attached as the relation's comment attribute when supplied.
+    /// </summary>
+    Task AddWorkItemAttachmentAsync(
+        string org, string project, int workItemId, string attachmentUrl, string? comment,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Returns all fields for each of the requested work items in a single
     /// batch call. The order of results matches the order of <paramref name="ids"/>.
     /// </summary>
@@ -124,6 +141,9 @@ public sealed record ApprovalUpdate(string ApprovalId, string Status, string? Co
 
 /// <summary>Raw bytes of a downloaded attachment plus the MIME type ADO reported for it.</summary>
 public sealed record AdoAttachmentContent(byte[] Content, string ContentType);
+
+/// <summary>Reference (id + url) to an attachment uploaded to the ADO attachment store.</summary>
+public sealed record AdoAttachmentRef(string Id, string Url);
 
 /// <summary>
 /// Carries the Azure DevOps error <c>message</c> from a failed WIQL execution so
@@ -257,6 +277,72 @@ internal sealed class AdoRestClient : IAdoRestClient
         var bytes = await res.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
         var contentType = res.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
         return new AdoAttachmentContent(bytes, contentType);
+    }
+
+    public async Task<AdoAttachmentRef> CreateAttachmentAsync(
+        string org, string project, string fileName, byte[] content, CancellationToken ct = default)
+    {
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
+                  $"/{Uri.EscapeDataString(project)}/_apis/wit/attachments" +
+                  $"?fileName={Uri.EscapeDataString(fileName)}&api-version=7.1";
+
+        var body = new ByteArrayContent(content);
+        body.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+
+        using var req = BuildRequest(HttpMethod.Post, url, body);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            _logger.LogWarning("ADO POST attachment {FileName} in {Org}/{Project} returned {Status}: {Body}",
+                fileName, org, project, (int)res.StatusCode, err);
+            res.EnsureSuccessStatusCode();
+        }
+
+        var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        var id = root.TryGetProperty("id", out var idEl) ? idEl.GetString() ?? string.Empty : string.Empty;
+        var attachmentUrl = root.TryGetProperty("url", out var urlEl) ? urlEl.GetString() ?? string.Empty : string.Empty;
+        return new AdoAttachmentRef(id, attachmentUrl);
+    }
+
+    public async Task AddWorkItemAttachmentAsync(
+        string org, string project, int workItemId, string attachmentUrl, string? comment,
+        CancellationToken ct = default)
+    {
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
+                  $"/{Uri.EscapeDataString(project)}/_apis/wit/workitems/{workItemId}" +
+                  $"?api-version=7.1";
+
+        var attributes = new Dictionary<string, object>();
+        if (!string.IsNullOrEmpty(comment)) attributes["comment"] = comment;
+
+        var ops = new List<object>
+        {
+            new
+            {
+                op = "add",
+                path = "/relations/-",
+                value = new { rel = "AttachedFile", url = attachmentUrl, attributes },
+            },
+        };
+        var patch = JsonSerializer.Serialize(ops);
+
+        using var req = BuildRequest(
+            HttpMethod.Patch, url,
+            body: new StringContent(patch, Encoding.UTF8, "application/json-patch+json"));
+
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            _logger.LogWarning("ADO PATCH WI {Id} add attachment relation in {Org}/{Project} returned {Status}: {Body}",
+                workItemId, org, project, (int)res.StatusCode, err);
+            res.EnsureSuccessStatusCode();
+        }
     }
 
     public async Task<IReadOnlyList<JsonElement>> GetWorkItemsBatchAsync(

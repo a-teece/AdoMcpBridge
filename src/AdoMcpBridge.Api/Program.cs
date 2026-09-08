@@ -61,6 +61,7 @@ builder.Services.AddSingleton<ICustomMcpTool, DownloadFieldTool>();
 builder.Services.AddSingleton<ICustomMcpTool, DownloadAttachmentTool>();
 builder.Services.AddSingleton<ICustomMcpTool, CreateUploadSlotTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WriteFieldFromSlotTool>();
+builder.Services.AddSingleton<ICustomMcpTool, UploadAttachmentFromSlotTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WitGetSlimTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WitGetBatchSlimTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WiqlQueryTool>();
