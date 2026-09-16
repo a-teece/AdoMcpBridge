@@ -53,8 +53,8 @@ internal static class BasicToolGuardrails
         "wit_work_item_comment_write is not available through this bridge — it applies no format " +
         "detection or escaping, so comment formatting arrives corrupted. Use the native tool " +
         "'ado_bridge_add_comment' instead: it takes the same work item and body (inline for small " +
-        "bodies, or via 'ado_bridge_create_upload_slot' + slotId/sha256 for large ones) and is a " +
-        "complete replacement.";
+        "bodies, or via 'ado_bridge_create_upload_slot' + slotId/sha256 for large ones), requires an " +
+        "explicit 'markdown' or 'html' format, and is a complete replacement.";
 
     public const string AttachmentDownloadRejection =
         "wit_work_item_attachment is not available through this bridge — it returns the whole " +
@@ -78,7 +78,7 @@ internal static class BasicToolGuardrails
     public static readonly string CommentWriteDescriptionPrefix =
         "IMPORTANT (ado-mcp-bridge): do NOT use this tool — the bridge rejects every call to it " +
         "because it corrupts comment formatting. Use the native tool 'ado_bridge_add_comment' " +
-        "instead, for comment bodies of any size. ";
+        "instead, for comment bodies of any size (it requires an explicit 'markdown' or 'html' format). ";
 
     public static readonly string AttachmentDownloadDescriptionPrefix =
         "IMPORTANT (ado-mcp-bridge): do NOT use this tool — the bridge rejects every call to it " +

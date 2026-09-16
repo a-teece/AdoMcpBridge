@@ -92,9 +92,16 @@ public interface IAdoRestClient
 
     /// <summary>
     /// Posts a new comment on a work item and returns the created comment element.
+    /// <paramref name="markdown"/> selects the stored comment format via ADO's
+    /// <c>format</c> query parameter (0 = Markdown, 1 = HTML): <c>true</c> stores
+    /// native Markdown so ADO renders it; <c>false</c> stores HTML. A comment posted
+    /// without this parameter defaults to HTML, so a Markdown body is shown as raw
+    /// syntax behind a "convert to markdown" prompt. Requires the 7.2-preview.4
+    /// comments API.
     /// </summary>
     Task<JsonElement> AddWorkItemCommentAsync(
-        string org, string project, int workItemId, string text, CancellationToken ct = default);
+        string org, string project, int workItemId, string text, bool markdown,
+        CancellationToken ct = default);
 
     /// <summary>
     /// Queries pipeline stage/check approvals in a project. Only the supplied
@@ -417,6 +424,11 @@ internal sealed class AdoRestClient : IAdoRestClient
     // surface the rest of this client uses.
     private const string CommentsApiVersion = "7.1-preview.4";
 
+    // Choosing the stored comment format (the `format` query parameter, 0 = Markdown,
+    // 1 = HTML) requires a newer comments API than the read endpoints above; without
+    // it ADO defaults a new comment to HTML and shows Markdown bodies as raw syntax.
+    private const string CommentsWriteApiVersion = "7.2-preview.4";
+
     public async Task<IReadOnlyList<JsonElement>> GetWorkItemCommentsAsync(
         string org, string project, int workItemId, CancellationToken ct = default)
     {
@@ -472,11 +484,16 @@ internal sealed class AdoRestClient : IAdoRestClient
     }
 
     public async Task<JsonElement> AddWorkItemCommentAsync(
-        string org, string project, int workItemId, string text, CancellationToken ct = default)
+        string org, string project, int workItemId, string text, bool markdown,
+        CancellationToken ct = default)
     {
+        // format: 0 = Markdown, 1 = HTML (ADO's CommentFormat enum). It rides as a query
+        // parameter — the request body is still just { text }. Without it ADO stores the
+        // comment as HTML, so a Markdown body renders as raw syntax in the UI.
+        var format = markdown ? 0 : 1;
         var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
                   $"/{Uri.EscapeDataString(project)}/_apis/wit/workItems/{workItemId}/comments" +
-                  $"?api-version={CommentsApiVersion}";
+                  $"?format={format}&api-version={CommentsWriteApiVersion}";
 
         var payload = JsonSerializer.Serialize(new { text });
         var body = new StringContent(payload, Encoding.UTF8, "application/json");
