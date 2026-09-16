@@ -6,6 +6,13 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.21](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.20...v0.1.21) (2026-09-16)
+
+
+### Bug Fixes
+
+* post work-item comments in an explicit markdown/html format ([#80](https://github.com/a-teece/AdoMcpBridge/issues/80)) ([d75f062](https://github.com/a-teece/AdoMcpBridge/commit/d75f0627bb329a5317b63f7af09c416c5a33d34d))
+
 ## [0.1.20](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.19...v0.1.20) (2026-09-08)
 
 
