@@ -372,19 +372,32 @@ public class AdoRestClientTests
     }
 
     [Fact]
-    public async Task AddWorkItemCommentAsync_posts_the_text_and_returns_created_comment()
+    public async Task AddWorkItemCommentAsync_posts_markdown_with_format_0_and_returns_created_comment()
     {
         var (client, handler) = CreateClient(Json("{\"id\":99,\"text\":\"posted\"}"));
 
-        var created = await client.AddWorkItemCommentAsync("org", "proj", 42, "posted");
+        var created = await client.AddWorkItemCommentAsync("org", "proj", 42, "posted", markdown: true);
 
         created.GetProperty("id").GetInt32().Should().Be(99);
         handler.LastRequest!.Method.Should().Be(HttpMethod.Post);
         handler.LastRequest.RequestUri!.AbsoluteUri.Should()
-            .Be("https://dev.azure.com/org/proj/_apis/wit/workItems/42/comments?api-version=7.1-preview.4");
+            .Be("https://dev.azure.com/org/proj/_apis/wit/workItems/42/comments?format=0&api-version=7.2-preview.4");
         using var sent = JsonDocument.Parse(handler.LastBody!);
         sent.RootElement.GetProperty("text").GetString().Should().Be("posted");
         handler.LastRequest.Headers.Authorization!.Parameter.Should().Be(CallerToken);
+    }
+
+    [Fact]
+    public async Task AddWorkItemCommentAsync_posts_html_with_format_1()
+    {
+        var (client, handler) = CreateClient(Json("{\"id\":99}"));
+
+        await client.AddWorkItemCommentAsync("org", "proj", 42, "<b>posted</b>", markdown: false);
+
+        handler.LastRequest!.RequestUri!.AbsoluteUri.Should()
+            .Be("https://dev.azure.com/org/proj/_apis/wit/workItems/42/comments?format=1&api-version=7.2-preview.4");
+        using var sent = JsonDocument.Parse(handler.LastBody!);
+        sent.RootElement.GetProperty("text").GetString().Should().Be("<b>posted</b>");
     }
 
     [Fact]
@@ -392,7 +405,7 @@ public class AdoRestClientTests
     {
         var (client, _) = CreateClient(Json("bad", HttpStatusCode.BadRequest));
 
-        var act = () => client.AddWorkItemCommentAsync("org", "proj", 42, "x");
+        var act = () => client.AddWorkItemCommentAsync("org", "proj", 42, "x", markdown: true);
 
         await act.Should().ThrowAsync<HttpRequestException>();
     }

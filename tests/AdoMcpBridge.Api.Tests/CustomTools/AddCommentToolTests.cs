@@ -17,7 +17,22 @@ public class AddCommentToolTests
 
     private AddCommentTool CreateTool() => new(_blobs, _ado, NullLogger<AddCommentTool>.Instance);
 
+    // Base args carry a valid 'format' by default so tests exercising other behaviour clear the
+    // format gate; put ["format"] in the extra dict (or use ArgsWithoutFormat) to override it.
     private static JsonElement Args(Dictionary<string, object?> extra)
+    {
+        var props = new Dictionary<string, object?>
+        {
+            ["organization"] = "org",
+            ["project"] = "proj",
+            ["workItemId"] = 42,
+            ["format"] = "markdown",
+        };
+        foreach (var kv in extra) props[kv.Key] = kv.Value;
+        return JsonDocument.Parse(JsonSerializer.Serialize(props)).RootElement.Clone();
+    }
+
+    private static JsonElement ArgsWithoutFormat(Dictionary<string, object?> extra)
     {
         var props = new Dictionary<string, object?>
         {
@@ -32,8 +47,103 @@ public class AddCommentToolTests
     private static string Sha(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
     private void StubCreatedComment(int id = 99) =>
-        _ado.AddWorkItemCommentAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _ado.AddWorkItemCommentAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(),
+                Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(JsonDocument.Parse(JsonSerializer.Serialize(new { id })).RootElement.Clone());
+
+    // ── format is required and must be explicit ────────────────────────────────
+
+    [Fact]
+    public async Task Rejects_when_format_omitted_and_does_not_post()
+    {
+        var result = await CreateTool().InvokeAsync(
+            ArgsWithoutFormat(new() { ["text"] = "hi" }), default);
+
+        result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("format is required");
+        result.Text.Should().Contain("no default is assumed");
+        await AssertNothingPosted();
+    }
+
+    [Fact]
+    public async Task Rejects_when_format_is_json_null_and_does_not_post()
+    {
+        var result = await CreateTool().InvokeAsync(Args(new() { ["text"] = "hi", ["format"] = null }), default);
+
+        result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("format is required");
+        await AssertNothingPosted();
+    }
+
+    [Fact]
+    public async Task Rejects_when_format_is_empty_string_and_does_not_post()
+    {
+        var result = await CreateTool().InvokeAsync(Args(new() { ["text"] = "hi", ["format"] = "" }), default);
+
+        result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("format is required");
+        await AssertNothingPosted();
+    }
+
+    [Fact]
+    public async Task Rejects_when_format_is_unrecognised_and_does_not_post()
+    {
+        var result = await CreateTool().InvokeAsync(Args(new() { ["text"] = "hi", ["format"] = "md" }), default);
+
+        result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("format is required");
+        result.Text.Should().Contain("md");
+        await AssertNothingPosted();
+    }
+
+    private async Task AssertNothingPosted()
+    {
+        await _ado.DidNotReceive().AddWorkItemCommentAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(),
+            Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await _blobs.DidNotReceive().ReadSlotAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    // ── format routing ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Markdown_format_posts_as_markdown_and_reports_it()
+    {
+        StubCreatedComment(101);
+
+        var result = await CreateTool().InvokeAsync(
+            Args(new() { ["text"] = "**bold**", ["format"] = "markdown" }), default);
+
+        result.IsError.Should().BeFalse();
+        JsonDocument.Parse(result.Text).RootElement.GetProperty("format").GetString().Should().Be("markdown");
+        await _ado.Received(1).AddWorkItemCommentAsync("org", "proj", 42, "**bold**", true, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Html_format_posts_as_html_and_reports_it()
+    {
+        StubCreatedComment(102);
+
+        var result = await CreateTool().InvokeAsync(
+            Args(new() { ["text"] = "<b>bold</b>", ["format"] = "html" }), default);
+
+        result.IsError.Should().BeFalse();
+        JsonDocument.Parse(result.Text).RootElement.GetProperty("format").GetString().Should().Be("html");
+        await _ado.Received(1).AddWorkItemCommentAsync("org", "proj", 42, "<b>bold</b>", false, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Format_is_case_insensitive()
+    {
+        StubCreatedComment(103);
+
+        var result = await CreateTool().InvokeAsync(
+            Args(new() { ["text"] = "hi", ["format"] = "MARKDOWN" }), default);
+
+        result.IsError.Should().BeFalse();
+        await _ado.Received(1).AddWorkItemCommentAsync("org", "proj", 42, "hi", true, Arg.Any<CancellationToken>());
+    }
 
     // ── inline path ───────────────────────────────────────────────────────────
 
@@ -49,7 +159,7 @@ public class AddCommentToolTests
         root.GetProperty("status").GetString().Should().Be("ADDED");
         root.GetProperty("commentId").GetInt32().Should().Be(101);
         root.GetProperty("charCount").GetInt32().Should().Be("looks good".Length);
-        await _ado.Received(1).AddWorkItemCommentAsync("org", "proj", 42, "looks good", Arg.Any<CancellationToken>());
+        await _ado.Received(1).AddWorkItemCommentAsync("org", "proj", 42, "looks good", true, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -62,7 +172,8 @@ public class AddCommentToolTests
         result.IsError.Should().BeTrue();
         result.Text.Should().Contain("ado_bridge_create_upload_slot");
         await _ado.DidNotReceive().AddWorkItemCommentAsync(
-            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(),
+            Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     // ── slot path ───────────────────────────────────────────────────────────
@@ -80,7 +191,7 @@ public class AddCommentToolTests
 
         result.IsError.Should().BeFalse();
         JsonDocument.Parse(result.Text).RootElement.GetProperty("commentId").GetInt32().Should().Be(202);
-        await _ado.Received(1).AddWorkItemCommentAsync("org", "proj", 42, body, Arg.Any<CancellationToken>());
+        await _ado.Received(1).AddWorkItemCommentAsync("org", "proj", 42, body, true, Arg.Any<CancellationToken>());
         await _blobs.Received(1).DeleteSlotAsync("slot-1", Arg.Any<CancellationToken>());
     }
 
@@ -96,7 +207,8 @@ public class AddCommentToolTests
         result.IsError.Should().BeTrue();
         result.Text.Should().Contain("SHA-256 mismatch");
         await _ado.DidNotReceive().AddWorkItemCommentAsync(
-            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(),
+            Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -132,7 +244,9 @@ public class AddCommentToolTests
     [Fact]
     public async Task Returns_error_on_ado_http_failure()
     {
-        _ado.AddWorkItemCommentAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        _ado.AddWorkItemCommentAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(),
+                Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns<JsonElement>(_ => throw new HttpRequestException("500"));
 
         var result = await CreateTool().InvokeAsync(Args(new() { ["text"] = "hi" }), default);

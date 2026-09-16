@@ -30,11 +30,16 @@ internal sealed class AddCommentTool : ICustomMcpTool
 
     public string Description =>
         "Write operations: Posts a comment on an Azure DevOps work item. " +
+        "format is REQUIRED and must be explicitly 'markdown' or 'html' — there is no default. " +
+        "format=markdown stores the body as native Markdown so ADO renders it; format=html stores it as HTML. " +
+        "(A comment posted without an explicit format defaults to HTML in ADO, which shows a Markdown body as " +
+        "raw syntax behind a 'convert to markdown' prompt — the reason this tool refuses to guess.) " +
         "Small bodies: pass the body inline via 'text'. " +
         $"Bodies longer than {InlineCommentCharLimit} characters MUST instead be uploaded via " +
         "ado_bridge_create_upload_slot and posted by passing 'slotId' + 'sha256' (the bridge verifies " +
         "the SHA-256 and reads the body from the slot), so a large comment never routes through the model. " +
-        "Provide exactly one of 'text' or 'slotId'. Returns {\"status\":\"ADDED\",\"commentId\":N,\"charCount\":N}. " +
+        "Provide exactly one of 'text' or 'slotId'. " +
+        "Returns {\"status\":\"ADDED\",\"commentId\":N,\"charCount\":N,\"format\":\"markdown|html\"}. " +
         "The body is stored verbatim.";
 
     public object InputSchema => new
@@ -48,12 +53,31 @@ internal sealed class AddCommentTool : ICustomMcpTool
             text = new { type = "string", description = $"Inline comment body. Use only for bodies up to {InlineCommentCharLimit} characters; otherwise use slotId." },
             slotId = new { type = "string", description = "Upload slot id (from ado_bridge_create_upload_slot) holding the comment body. Requires sha256." },
             sha256 = new { type = "string", description = "Lowercase hex SHA-256 of the raw UTF-8 bytes of the uploaded body. Required with slotId." },
+            format = new { type = "string", @enum = new[] { "markdown", "html" }, description = "REQUIRED — no default is assumed. 'markdown': body stored as native Markdown (ADO renders it). 'html': body stored as HTML. A comment posted without a format defaults to HTML and shows Markdown as raw syntax." },
         },
-        required = new[] { "organization", "project", "workItemId" },
+        required = new[] { "organization", "project", "workItemId", "format" },
     };
 
     public async Task<McpToolResult> InvokeAsync(JsonElement arguments, CancellationToken ct)
     {
+        // `format` must be stated explicitly. A JSON Schema `required` array is not enforced by
+        // every MCP client, so validate here — and validate first, so a bad request fails before
+        // the slot is read or any ADO call is made.
+        var hasFormat = arguments.TryGetProperty("format", out var fmtEl);
+        var formatValue = hasFormat && fmtEl.ValueKind == JsonValueKind.String ? fmtEl.GetString() : null;
+        var isMarkdown = string.Equals(formatValue, "markdown", StringComparison.OrdinalIgnoreCase);
+        var isHtml = string.Equals(formatValue, "html", StringComparison.OrdinalIgnoreCase);
+        if (!isMarkdown && !isHtml)
+        {
+            var received = !hasFormat
+                ? "(omitted)"
+                : fmtEl.ValueKind == JsonValueKind.Null ? "null" : $"'{fmtEl}'";
+            _logger.LogWarning("ado_bridge_add_comment: rejected — format={Received}", received);
+            return new McpToolResult(
+                "format is required and must be explicitly 'markdown' or 'html' — " +
+                $"no default is assumed. received={received}", IsError: true);
+        }
+
         var org = arguments.GetProperty("organization").GetString()!;
         var project = arguments.GetProperty("project").GetString()!;
         var workItemId = arguments.GetProperty("workItemId").GetInt32();
@@ -93,7 +117,7 @@ internal sealed class AddCommentTool : ICustomMcpTool
         JsonElement created;
         try
         {
-            created = await _ado.AddWorkItemCommentAsync(org, project, workItemId, body, ct)
+            created = await _ado.AddWorkItemCommentAsync(org, project, workItemId, body, isMarkdown, ct)
                                 .ConfigureAwait(false);
         }
         catch (HttpRequestException ex)
@@ -106,11 +130,17 @@ internal sealed class AddCommentTool : ICustomMcpTool
             : null;
 
         _logger.LogInformation(
-            "ado_bridge_add_comment: WI {Id} status=ADDED commentId={CommentId} chars={Chars}",
-            workItemId, commentId, body.Length);
+            "ado_bridge_add_comment: WI {Id} status=ADDED commentId={CommentId} chars={Chars} format={Format}",
+            workItemId, commentId, body.Length, isMarkdown ? "markdown" : "html");
 
         return new McpToolResult(
-            JsonSerializer.Serialize(new { status = "ADDED", commentId, charCount = body.Length }));
+            JsonSerializer.Serialize(new
+            {
+                status = "ADDED",
+                commentId,
+                charCount = body.Length,
+                format = isMarkdown ? "markdown" : "html",
+            }));
     }
 
     private async Task<(string? Body, McpToolResult? Error)> ResolveFromSlotAsync(
