@@ -1,11 +1,13 @@
 using System.Text;
 using System.Text.Json;
 using AdoMcpBridge.Api.CustomTools;
+using AdoMcpBridge.Api.Options;
 using AdoMcpBridge.Api.Proxy;
 using AdoMcpBridge.Core.Abstractions;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 
 namespace AdoMcpBridge.Api.Tests.CustomTools;
@@ -34,11 +36,11 @@ public sealed class CustomToolMiddlewareTests
         RefreshTokenExpiresAt: DateTimeOffset.UtcNow.AddDays(14),
         CreatedAt: DateTimeOffset.UtcNow.AddMinutes(-1));
 
-    private static DefaultHttpContext ContextForToolCall(string toolName)
+    private static DefaultHttpContext ContextForToolCall(string toolName, string argumentsJson = "{}")
     {
         var body =
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\"," +
-            "\"params\":{\"name\":\"" + toolName + "\",\"arguments\":{}}}";
+            "\"params\":{\"name\":\"" + toolName + "\",\"arguments\":" + argumentsJson + "}}";
         var bytes = Encoding.UTF8.GetBytes(body);
 
         var ctx = new DefaultHttpContext();
@@ -50,6 +52,10 @@ public sealed class CustomToolMiddlewareTests
         ctx.Items[HttpContextItemKeys.TokenRecord] = Record();
         return ctx;
     }
+
+    private static IOptions<AdoMcpOptions> Options(string defaultOrganization = "")
+        => Microsoft.Extensions.Options.Options.Create(
+            new AdoMcpOptions { DefaultOrganization = defaultOrganization });
 
     private static IKeyVaultEncryptor Encryptor()
     {
@@ -84,7 +90,7 @@ public sealed class CustomToolMiddlewareTests
             _ => Task.CompletedTask, new[] { (ICustomMcpTool)tool },
             new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
 
-        await mw.InvokeAsync(ctx, Encryptor(), entra);
+        await mw.InvokeAsync(ctx, Encryptor(), entra, Options());
 
         tokenSeenByTool.Should().Be("ado-rest-token");
         ctx.Items[HttpContextItemKeys.AdoRestAccessToken].Should().Be("ado-rest-token");
@@ -111,7 +117,7 @@ public sealed class CustomToolMiddlewareTests
             _ => Task.CompletedTask, new[] { (ICustomMcpTool)tool },
             new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
 
-        await mw.InvokeAsync(ctx, Encryptor(), entra);
+        await mw.InvokeAsync(ctx, Encryptor(), entra, Options());
 
         toolInvoked.Should().BeFalse();
 
@@ -150,7 +156,7 @@ public sealed class CustomToolMiddlewareTests
             _ => Task.CompletedTask, new[] { (ICustomMcpTool)tool },
             new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
 
-        await mw.InvokeAsync(ctx, Encryptor(), WorkingEntra());
+        await mw.InvokeAsync(ctx, Encryptor(), WorkingEntra(), Options());
 
         ctx.Response.Body.Seek(0, SeekOrigin.Begin);
         var responseText = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
@@ -173,7 +179,7 @@ public sealed class CustomToolMiddlewareTests
             _ => Task.CompletedTask, new[] { (ICustomMcpTool)tool },
             new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
 
-        await mw.InvokeAsync(ctx, Encryptor(), WorkingEntra());
+        await mw.InvokeAsync(ctx, Encryptor(), WorkingEntra(), Options());
 
         ctx.Response.Body.Seek(0, SeekOrigin.Begin);
         var responseText = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
@@ -182,6 +188,80 @@ public sealed class CustomToolMiddlewareTests
         var error = doc.RootElement.GetProperty("error");
         error.GetProperty("code").GetInt32().Should().Be(-32603);
         error.GetProperty("message").GetString().Should().Be("Internal error");
+    }
+
+    [Fact]
+    public async Task Injects_configured_default_organization_when_caller_omits_it()
+    {
+        var ctx = ContextForToolCall("spy_tool");
+
+        string? orgSeenByTool = null;
+        var tool = new CallbackTool("spy_tool", (args, _) =>
+        {
+            orgSeenByTool = args.TryGetProperty("organization", out var o) ? o.GetString() : null;
+            return Task.FromResult(new McpToolResult("ok"));
+        });
+
+        var mw = new CustomToolMiddleware(
+            _ => Task.CompletedTask, new[] { (ICustomMcpTool)tool },
+            new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
+
+        await mw.InvokeAsync(ctx, Encryptor(), WorkingEntra(), Options("Enate"));
+
+        orgSeenByTool.Should().Be("Enate");
+    }
+
+    [Fact]
+    public async Task Does_not_override_a_caller_supplied_organization_with_the_default()
+    {
+        var ctx = ContextForToolCall("spy_tool", "{\"organization\":\"Contoso\"}");
+
+        string? orgSeenByTool = null;
+        var tool = new CallbackTool("spy_tool", (args, _) =>
+        {
+            orgSeenByTool = args.TryGetProperty("organization", out var o) ? o.GetString() : null;
+            return Task.FromResult(new McpToolResult("ok"));
+        });
+
+        var mw = new CustomToolMiddleware(
+            _ => Task.CompletedTask, new[] { (ICustomMcpTool)tool },
+            new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
+
+        await mw.InvokeAsync(ctx, Encryptor(), WorkingEntra(), Options("Enate"));
+
+        orgSeenByTool.Should().Be("Contoso");
+    }
+
+    [Fact]
+    public async Task Leaves_missing_organization_to_the_tool_when_no_default_is_configured()
+    {
+        var ctx = ContextForToolCall("spy_tool");
+
+        var tool = new CallbackTool("spy_tool", (args, _) =>
+        {
+            var org = args.TryGetProperty("organization", out var o) ? o.GetString() : null;
+            if (string.IsNullOrEmpty(org))
+            {
+                throw new CallerArgumentException(
+                    "'organization' is required and must be a non-empty string.");
+            }
+
+            return Task.FromResult(new McpToolResult("ok"));
+        });
+
+        var mw = new CustomToolMiddleware(
+            _ => Task.CompletedTask, new[] { (ICustomMcpTool)tool },
+            new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
+
+        await mw.InvokeAsync(ctx, Encryptor(), WorkingEntra(), Options());
+
+        ctx.Response.Body.Seek(0, SeekOrigin.Begin);
+        var responseText = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
+        using var doc = JsonDocument.Parse(responseText);
+        var error = doc.RootElement.GetProperty("error");
+        error.GetProperty("code").GetInt32().Should().Be(-32602);
+        error.GetProperty("message").GetString().Should()
+            .Be("'organization' is required and must be a non-empty string.");
     }
 
     private static DefaultHttpContext ContextForWitWorkItemWriteCall(string argumentsJson)
@@ -219,7 +299,8 @@ public sealed class CustomToolMiddlewareTests
             Array.Empty<ICustomMcpTool>(),
             new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
 
-        await mw.InvokeAsync(ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>());
+        await mw.InvokeAsync(
+            ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>(), Options());
 
         forwarded.Should().NotBeNull();
         using var doc = JsonDocument.Parse(forwarded!);
@@ -239,7 +320,8 @@ public sealed class CustomToolMiddlewareTests
             Array.Empty<ICustomMcpTool>(),
             new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
 
-        await mw.InvokeAsync(ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>());
+        await mw.InvokeAsync(
+            ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>(), Options());
 
         forwarded.Should().NotBeNull();
         using var doc = JsonDocument.Parse(forwarded!);
@@ -259,7 +341,8 @@ public sealed class CustomToolMiddlewareTests
             Array.Empty<ICustomMcpTool>(),
             new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
 
-        await mw.InvokeAsync(ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>());
+        await mw.InvokeAsync(
+            ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>(), Options());
 
         nextCalled.Should().BeFalse();
 
@@ -283,7 +366,8 @@ public sealed class CustomToolMiddlewareTests
             Array.Empty<ICustomMcpTool>(),
             new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
 
-        await mw.InvokeAsync(ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>());
+        await mw.InvokeAsync(
+            ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>(), Options());
 
         nextCalled.Should().BeFalse();
 
@@ -328,7 +412,8 @@ public sealed class CustomToolMiddlewareTests
             Array.Empty<ICustomMcpTool>(),
             new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
 
-        await mw.InvokeAsync(ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>());
+        await mw.InvokeAsync(
+            ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>(), Options());
 
         nextCalled.Should().BeFalse();
 
@@ -352,7 +437,8 @@ public sealed class CustomToolMiddlewareTests
             Array.Empty<ICustomMcpTool>(),
             new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
 
-        await mw.InvokeAsync(ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>());
+        await mw.InvokeAsync(
+            ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>(), Options());
 
         nextCalled.Should().BeFalse();
 

@@ -1,7 +1,10 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using AdoMcpBridge.Api.Options;
 using AdoMcpBridge.Api.Proxy;
 using AdoMcpBridge.Core.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace AdoMcpBridge.Api.CustomTools;
 
@@ -43,7 +46,9 @@ internal sealed class CustomToolMiddleware
         _logger = logger;
     }
 
-    public async Task InvokeAsync(HttpContext context, IKeyVaultEncryptor encryptor, IEntraTokenClient entra)
+    public async Task InvokeAsync(
+        HttpContext context, IKeyVaultEncryptor encryptor, IEntraTokenClient entra,
+        IOptions<AdoMcpOptions> options)
     {
         if (!HttpMethods.IsPost(context.Request.Method))
         {
@@ -103,6 +108,7 @@ internal sealed class CustomToolMiddleware
                     // Custom-tool responses are locally generated plain JSON, never SSE, so
                     // there is nothing to inject a notification frame into — skip it here.
                     var args = p.TryGetProperty("arguments", out var a) ? a : default;
+                    args = ApplyDefaultOrganization(args, options.Value.DefaultOrganization);
                     await HandleToolCallAsync(context, tool, args, id, encryptor, entra);
                     return;
                 }
@@ -251,6 +257,34 @@ internal sealed class CustomToolMiddleware
     // GUIDs, so this only ever reveals a leading fragment.
     private static string Prefix(string sessionId) =>
         string.Concat(sessionId.AsSpan(0, Math.Min(8, sessionId.Length)), "…");
+
+    /// <summary>
+    /// Fills in a missing <c>organization</c> argument from the configured default so callers
+    /// need not pass it on every native-tool call. Returns <paramref name="arguments"/>
+    /// unchanged when no default is configured, the args are not a JSON object, or the caller
+    /// already supplied a non-empty string <c>organization</c> — a caller-supplied value is
+    /// never overridden. Injecting an ignored <c>organization</c> into a tool that does not
+    /// read it is harmless, so this is a blanket inject-when-missing.
+    /// </summary>
+    private static JsonElement ApplyDefaultOrganization(JsonElement arguments, string defaultOrganization)
+    {
+        if (string.IsNullOrEmpty(defaultOrganization) || arguments.ValueKind != JsonValueKind.Object)
+        {
+            return arguments;
+        }
+
+        if (arguments.TryGetProperty("organization", out var existing) &&
+            existing.ValueKind == JsonValueKind.String &&
+            !string.IsNullOrEmpty(existing.GetString()))
+        {
+            return arguments;
+        }
+
+        var node = JsonNode.Parse(arguments.GetRawText())!.AsObject();
+        node["organization"] = defaultOrganization;
+        using var patched = JsonDocument.Parse(node.ToJsonString());
+        return patched.RootElement.Clone();
+    }
 
     private async Task HandleToolCallAsync(
         HttpContext context, ICustomMcpTool tool, JsonElement arguments, JsonElement? id,

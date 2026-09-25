@@ -4,6 +4,15 @@ public sealed class AdoMcpOptions
 {
     public string Issuer { get; set; } = "https://localhost:5001";
     public string UpstreamBaseUrl { get; set; } = "https://mcp.dev.azure.com";
+
+    /// <summary>
+    /// Organization applied to custom <c>ado_bridge_*</c> tool calls when the caller
+    /// omits <c>organization</c>. Empty (the default) preserves the required-argument
+    /// behaviour; single-tenant deployments set it via <c>AdoMcp__DefaultOrganization</c>.
+    /// A caller-supplied <c>organization</c> is never overridden.
+    /// </summary>
+    public string DefaultOrganization { get; set; } = "";
+
     public EntraOptions Entra { get; set; } = new();
 }
 

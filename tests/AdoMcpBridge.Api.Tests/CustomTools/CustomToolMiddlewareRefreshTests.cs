@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using AdoMcpBridge.Api.CustomTools;
+using AdoMcpBridge.Api.Options;
 using AdoMcpBridge.Core.Abstractions;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
@@ -65,7 +66,9 @@ public sealed class CustomToolMiddlewareRefreshTests
         };
 
     private static async Task InvokeAsync(CustomToolMiddleware mw, HttpContext ctx)
-        => await mw.InvokeAsync(ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>());
+        => await mw.InvokeAsync(
+            ctx, Substitute.For<IKeyVaultEncryptor>(), Substitute.For<IEntraTokenClient>(),
+            Microsoft.Extensions.Options.Options.Create(new AdoMcpOptions()));
 
     private const string InitBody =
         "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":\"2024-11-05\"," +
