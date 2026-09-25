@@ -87,13 +87,14 @@ internal sealed class WiqlQueryTool : ICustomMcpTool
                 .QueryByWiqlAsync(org, project, team, wiql!, effectiveTop + 1, timePrecision, ct)
                 .ConfigureAwait(false);
         }
-        catch (AdoWiqlQueryException ex)
+        catch (AdoRestException ex)
         {
-            return new McpToolResult($"WIQL query rejected by Azure DevOps: {ex.Message}", IsError: true);
+            return new McpToolResult(
+                $"Azure DevOps returned HTTP {ex.StatusCode}: {ex.Message}", IsError: true);
         }
         catch (HttpRequestException ex)
         {
-            return new McpToolResult($"ADO request failed: {ex.Message}", IsError: true);
+            return new McpToolResult($"ADO request failed (transport): {ex.Message}", IsError: true);
         }
 
         return new McpToolResult(BuildSlimJson(result, effectiveTop));

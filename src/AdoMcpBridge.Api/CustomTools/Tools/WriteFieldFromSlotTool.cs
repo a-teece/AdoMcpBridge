@@ -69,12 +69,12 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
                 $"no default is assumed. received={received}", IsError: true);
         }
 
-        var slotId = arguments.GetProperty("slotId").GetString()!;
-        var org = arguments.GetProperty("organization").GetString()!;
-        var project = arguments.GetProperty("project").GetString()!;
-        var workItemId = arguments.GetProperty("workItemId").GetInt32();
-        var fieldRef = arguments.GetProperty("fieldRefName").GetString()!;
-        var expectedSha = arguments.GetProperty("sha256").GetString()!.ToLowerInvariant();
+        var slotId = ToolArgs.RequireString(arguments, "slotId");
+        var org = ToolArgs.RequireString(arguments, "organization");
+        var project = ToolArgs.RequireString(arguments, "project");
+        var workItemId = ToolArgs.RequireInt(arguments, "workItemId");
+        var fieldRef = ToolArgs.RequireString(arguments, "fieldRefName");
+        var expectedSha = ToolArgs.RequireString(arguments, "sha256").ToLowerInvariant();
 
         _logger.LogInformation(
             "ado_bridge_write_field_from_slot: WI {Id} field {Field} slot {Slot} format={Format}",
@@ -119,9 +119,14 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
                     fieldFormat: isMarkdown ? "Markdown" : null, ct)
                   .ConfigureAwait(false);
         }
+        catch (AdoRestException ex)
+        {
+            return new McpToolResult(
+                $"Azure DevOps returned HTTP {ex.StatusCode}: {ex.Message}", IsError: true);
+        }
         catch (HttpRequestException ex)
         {
-            return new McpToolResult($"ADO PATCH failed: {ex.Message}", IsError: true);
+            return new McpToolResult($"ADO request failed (transport): {ex.Message}", IsError: true);
         }
 
         // 4. Re-fetch to confirm the write succeeded.
@@ -130,6 +135,12 @@ internal sealed class WriteFieldFromSlotTool : ICustomMcpTool
         {
             storedValue = await _ado.GetFieldAsync(org, project, workItemId, fieldRef, ct)
                                     .ConfigureAwait(false);
+        }
+        catch (AdoRestException ex)
+        {
+            return new McpToolResult(
+                $"Write succeeded but re-fetch failed (cannot verify): " +
+                $"Azure DevOps returned HTTP {ex.StatusCode}: {ex.Message}", IsError: true);
         }
         catch (HttpRequestException ex)
         {

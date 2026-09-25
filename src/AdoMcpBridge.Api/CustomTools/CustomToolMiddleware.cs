@@ -287,6 +287,16 @@ internal sealed class CustomToolMiddleware
         {
             result = await tool.InvokeAsync(arguments, context.RequestAborted);
         }
+        catch (CallerArgumentException ex)
+        {
+            // A missing/malformed required argument is the caller's fault, not an internal
+            // failure — surface it as -32602 (invalid params) with the actionable message,
+            // rather than the opaque -32603 a raw KeyNotFoundException would become.
+            _logger.LogInformation("Tool {Tool} rejected caller arguments: {Message}", tool.Name, ex.Message);
+            await JsonRpcHelpers.WriteErrorAsync(
+                context.Response, id, -32602, ex.Message, context.RequestAborted);
+            return;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unhandled exception in custom tool {Tool}", tool.Name);

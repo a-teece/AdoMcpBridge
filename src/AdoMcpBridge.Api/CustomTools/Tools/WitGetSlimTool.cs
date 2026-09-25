@@ -47,9 +47,9 @@ internal sealed class WitGetSlimTool : ICustomMcpTool
 
     public async Task<McpToolResult> InvokeAsync(JsonElement arguments, CancellationToken ct)
     {
-        var org = arguments.GetProperty("organization").GetString()!;
-        var project = arguments.GetProperty("project").GetString()!;
-        var id = arguments.GetProperty("id").GetInt32();
+        var org = ToolArgs.RequireString(arguments, "organization");
+        var project = ToolArgs.RequireString(arguments, "project");
+        var id = ToolArgs.RequireInt(arguments, "id");
 
         _logger.LogInformation("ado_bridge_wit_get: WI {Id} in {Org}/{Project}", id, org, project);
 
@@ -63,9 +63,14 @@ internal sealed class WitGetSlimTool : ICustomMcpTool
             workItem = await witTask;
             longTextFields = await typesTask;
         }
+        catch (AdoRestException ex)
+        {
+            return new McpToolResult(
+                $"Azure DevOps returned HTTP {ex.StatusCode}: {ex.Message}", IsError: true);
+        }
         catch (HttpRequestException ex)
         {
-            return new McpToolResult($"ADO request failed: {ex.Message}", IsError: true);
+            return new McpToolResult($"ADO request failed (transport): {ex.Message}", IsError: true);
         }
 
         if (workItem is null)

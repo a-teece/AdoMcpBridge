@@ -169,7 +169,7 @@ public class AdoRestClientTests
 
         var act = () => client.QueryApprovalsAsync("org", "proj", null, null, null, null, null);
 
-        await act.Should().ThrowAsync<HttpRequestException>();
+        await act.Should().ThrowAsync<AdoRestException>();
     }
 
     // ── GetApprovalAsync ─────────────────────────────────────────────────────
@@ -228,7 +228,20 @@ public class AdoRestClientTests
 
         var act = () => client.GetApprovalAsync("org", "proj", "a1", null);
 
-        await act.Should().ThrowAsync<HttpRequestException>();
+        await act.Should().ThrowAsync<AdoRestException>();
+    }
+
+    [Fact]
+    public async Task GetApprovalAsync_surfaces_the_parsed_ado_message_and_status_on_non_success()
+    {
+        var (client, _) = CreateClient(Json(
+            "{\"message\":\"TF401019: access denied\"}", HttpStatusCode.Forbidden));
+
+        var act = () => client.GetApprovalAsync("org", "proj", "a1", null);
+
+        var ex = (await act.Should().ThrowAsync<AdoRestException>()).Which;
+        ex.Message.Should().Be("TF401019: access denied");
+        ex.StatusCode.Should().Be(403);
     }
 
     // ── UpdateApprovalsAsync ─────────────────────────────────────────────────
@@ -308,7 +321,7 @@ public class AdoRestClientTests
         var act = () => client.UpdateApprovalsAsync(
             "org", "proj", [new ApprovalUpdate("a1", "approved", null)]);
 
-        await act.Should().ThrowAsync<HttpRequestException>();
+        await act.Should().ThrowAsync<AdoRestException>();
     }
 
     // ── work-item comments ───────────────────────────────────────────────────
@@ -345,7 +358,7 @@ public class AdoRestClientTests
 
         var act = () => client.GetWorkItemCommentsAsync("org", "proj", 42);
 
-        await act.Should().ThrowAsync<HttpRequestException>();
+        await act.Should().ThrowAsync<AdoRestException>();
     }
 
     [Fact]
@@ -407,7 +420,7 @@ public class AdoRestClientTests
 
         var act = () => client.AddWorkItemCommentAsync("org", "proj", 42, "x", markdown: true);
 
-        await act.Should().ThrowAsync<HttpRequestException>();
+        await act.Should().ThrowAsync<AdoRestException>();
     }
 
     // ── QueryByWiqlAsync ─────────────────────────────────────────────────────
@@ -511,8 +524,9 @@ public class AdoRestClientTests
 
         var act = () => client.QueryByWiqlAsync("org", null, null, "q", null, null);
 
-        (await act.Should().ThrowAsync<AdoWiqlQueryException>())
-            .Which.Message.Should().Be("TF51005: bad field [System.Bogus]");
+        var ex = (await act.Should().ThrowAsync<AdoRestException>()).Which;
+        ex.Message.Should().Be("TF51005: bad field [System.Bogus]");
+        ex.StatusCode.Should().Be(400);
     }
 
     [Fact]
@@ -522,7 +536,7 @@ public class AdoRestClientTests
 
         var act = () => client.QueryByWiqlAsync("org", null, null, "q", null, null);
 
-        (await act.Should().ThrowAsync<AdoWiqlQueryException>())
+        (await act.Should().ThrowAsync<AdoRestException>())
             .Which.Message.Should().Be("plain-text failure");
     }
 
@@ -533,7 +547,7 @@ public class AdoRestClientTests
 
         var act = () => client.QueryByWiqlAsync("org", null, null, "q", null, null);
 
-        (await act.Should().ThrowAsync<AdoWiqlQueryException>())
+        (await act.Should().ThrowAsync<AdoRestException>())
             .Which.Message.Should().Be("{\"typeKey\":\"X\"}");
     }
 
@@ -544,7 +558,7 @@ public class AdoRestClientTests
 
         var act = () => client.QueryByWiqlAsync("org", null, null, "q", null, null);
 
-        (await act.Should().ThrowAsync<AdoWiqlQueryException>())
+        (await act.Should().ThrowAsync<AdoRestException>())
             .Which.Message.Should().Be("{\"message\":123}");
     }
 
@@ -555,7 +569,7 @@ public class AdoRestClientTests
 
         var act = () => client.QueryByWiqlAsync("org", null, null, "q", null, null);
 
-        (await act.Should().ThrowAsync<AdoWiqlQueryException>())
+        (await act.Should().ThrowAsync<AdoRestException>())
             .Which.Message.Should().Be("[\"unexpected\"]");
     }
 
@@ -570,7 +584,7 @@ public class AdoRestClientTests
 
         var act = () => client.QueryByWiqlAsync("org", null, null, "q", null, null);
 
-        (await act.Should().ThrowAsync<AdoWiqlQueryException>())
+        (await act.Should().ThrowAsync<AdoRestException>())
             .Which.Message.Should().Contain("500");
     }
 
@@ -631,7 +645,7 @@ public class AdoRestClientTests
 
         var act = () => client.DownloadAttachmentAsync("org", "proj", "the-guid");
 
-        await act.Should().ThrowAsync<HttpRequestException>();
+        await act.Should().ThrowAsync<AdoRestException>();
     }
 
     // ── CreateAttachmentAsync ────────────────────────────────────────────────
@@ -665,7 +679,7 @@ public class AdoRestClientTests
 
         var act = () => client.CreateAttachmentAsync("org", "proj", "f", [1]);
 
-        await act.Should().ThrowAsync<HttpRequestException>();
+        await act.Should().ThrowAsync<AdoRestException>();
     }
 
     // ── AddWorkItemAttachmentAsync ───────────────────────────────────────────
@@ -712,6 +726,6 @@ public class AdoRestClientTests
 
         var act = () => client.AddWorkItemAttachmentAsync("org", "proj", 42, "https://x/a/g", null);
 
-        await act.Should().ThrowAsync<HttpRequestException>();
+        await act.Should().ThrowAsync<AdoRestException>();
     }
 }

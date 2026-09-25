@@ -58,11 +58,11 @@ internal sealed class UploadAttachmentFromSlotTool : ICustomMcpTool
 
     public async Task<McpToolResult> InvokeAsync(JsonElement arguments, CancellationToken ct)
     {
-        var slotId = arguments.GetProperty("slotId").GetString()!;
-        var org = arguments.GetProperty("organization").GetString()!;
-        var project = arguments.GetProperty("project").GetString()!;
-        var fileName = arguments.GetProperty("fileName").GetString()!;
-        var expectedSha = arguments.GetProperty("sha256").GetString()!.ToLowerInvariant();
+        var slotId = ToolArgs.RequireString(arguments, "slotId");
+        var org = ToolArgs.RequireString(arguments, "organization");
+        var project = ToolArgs.RequireString(arguments, "project");
+        var fileName = ToolArgs.RequireString(arguments, "fileName");
+        var expectedSha = ToolArgs.RequireString(arguments, "sha256").ToLowerInvariant();
 
         int? workItemId = arguments.TryGetProperty("workItemId", out var widEl) && widEl.ValueKind == JsonValueKind.Number
             ? widEl.GetInt32()
@@ -105,9 +105,14 @@ internal sealed class UploadAttachmentFromSlotTool : ICustomMcpTool
             attachment = await _ado.CreateAttachmentAsync(org, project, fileName, rawBytes, ct)
                                    .ConfigureAwait(false);
         }
+        catch (AdoRestException ex)
+        {
+            return new McpToolResult(
+                $"Azure DevOps returned HTTP {ex.StatusCode}: {ex.Message}", IsError: true);
+        }
         catch (HttpRequestException ex)
         {
-            return new McpToolResult($"ADO attachment upload failed: {ex.Message}", IsError: true);
+            return new McpToolResult($"ADO request failed (transport): {ex.Message}", IsError: true);
         }
 
         // 4. The bytes now live in ADO — the slot is redundant. Clean it up best-effort
@@ -129,7 +134,7 @@ internal sealed class UploadAttachmentFromSlotTool : ICustomMcpTool
                 await _ado.AddWorkItemAttachmentAsync(org, project, wid, attachment.Url, comment, ct)
                           .ConfigureAwait(false);
             }
-            catch (HttpRequestException ex)
+            catch (Exception ex) when (ex is AdoRestException or HttpRequestException)
             {
                 // The file uploaded successfully; only the work-item link failed (e.g. a bad
                 // workItemId or missing edit permission). The attachment now lives in the store

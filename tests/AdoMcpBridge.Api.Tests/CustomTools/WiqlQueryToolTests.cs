@@ -316,23 +316,25 @@ public class WiqlQueryToolTests
     // ── error surfacing ──────────────────────────────────────────────────────
 
     [Fact]
-    public async Task InvokeAsync_surfaces_the_ado_wiql_error_message()
+    public async Task InvokeAsync_surfaces_the_ado_wiql_error_message_and_status()
     {
         _ado.QueryByWiqlAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
                 Arg.Any<int?>(), Arg.Any<bool?>(), Arg.Any<CancellationToken>())
-            .Returns<JsonElement>(_ => throw new AdoWiqlQueryException(
+            .Returns<JsonElement>(_ => throw new AdoRestException(
+                400,
                 "TF51005: The query references a field that does not exist. The error is caused by «[System.Bogus]»."));
 
         var result = await CreateTool().InvokeAsync(
             Args(new { organization = "org", wiql = "SELECT [System.Bogus] FROM WorkItems" }), default);
 
         result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("HTTP 400");
         result.Text.Should().Contain("TF51005");
         result.Text.Should().Contain("[System.Bogus]");
     }
 
     [Fact]
-    public async Task InvokeAsync_returns_generic_error_on_transport_failure()
+    public async Task InvokeAsync_returns_transport_error_on_transport_failure()
     {
         _ado.QueryByWiqlAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
                 Arg.Any<int?>(), Arg.Any<bool?>(), Arg.Any<CancellationToken>())
@@ -341,7 +343,7 @@ public class WiqlQueryToolTests
         var result = await CreateTool().InvokeAsync(Args(new { organization = "org", wiql = "q" }), default);
 
         result.IsError.Should().BeTrue();
-        result.Text.Should().Contain("ADO request failed");
+        result.Text.Should().Contain("ADO request failed (transport)");
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

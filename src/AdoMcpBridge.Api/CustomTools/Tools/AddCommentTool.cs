@@ -78,9 +78,9 @@ internal sealed class AddCommentTool : ICustomMcpTool
                 $"no default is assumed. received={received}", IsError: true);
         }
 
-        var org = arguments.GetProperty("organization").GetString()!;
-        var project = arguments.GetProperty("project").GetString()!;
-        var workItemId = arguments.GetProperty("workItemId").GetInt32();
+        var org = ToolArgs.RequireString(arguments, "organization");
+        var project = ToolArgs.RequireString(arguments, "project");
+        var workItemId = ToolArgs.RequireInt(arguments, "workItemId");
 
         var text = arguments.TryGetProperty("text", out var textEl) && textEl.ValueKind == JsonValueKind.String
             ? textEl.GetString()
@@ -120,9 +120,14 @@ internal sealed class AddCommentTool : ICustomMcpTool
             created = await _ado.AddWorkItemCommentAsync(org, project, workItemId, body, isMarkdown, ct)
                                 .ConfigureAwait(false);
         }
+        catch (AdoRestException ex)
+        {
+            return new McpToolResult(
+                $"Azure DevOps returned HTTP {ex.StatusCode}: {ex.Message}", IsError: true);
+        }
         catch (HttpRequestException ex)
         {
-            return new McpToolResult($"ADO request failed: {ex.Message}", IsError: true);
+            return new McpToolResult($"ADO request failed (transport): {ex.Message}", IsError: true);
         }
 
         int? commentId = created.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.Number
