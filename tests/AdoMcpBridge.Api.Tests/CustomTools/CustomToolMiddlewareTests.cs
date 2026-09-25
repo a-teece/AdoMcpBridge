@@ -212,6 +212,48 @@ public sealed class CustomToolMiddlewareTests
     }
 
     [Fact]
+    public async Task Injects_configured_default_organization_when_caller_passes_empty_string()
+    {
+        var ctx = ContextForToolCall("spy_tool", "{\"organization\":\"\"}");
+
+        string? orgSeenByTool = null;
+        var tool = new CallbackTool("spy_tool", (args, _) =>
+        {
+            orgSeenByTool = args.TryGetProperty("organization", out var o) ? o.GetString() : null;
+            return Task.FromResult(new McpToolResult("ok"));
+        });
+
+        var mw = new CustomToolMiddleware(
+            _ => Task.CompletedTask, new[] { (ICustomMcpTool)tool },
+            new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
+
+        await mw.InvokeAsync(ctx, Encryptor(), WorkingEntra(), Options("Enate"));
+
+        orgSeenByTool.Should().Be("Enate");
+    }
+
+    [Fact]
+    public async Task Injects_configured_default_organization_when_caller_passes_whitespace_only()
+    {
+        var ctx = ContextForToolCall("spy_tool", "{\"organization\":\"   \"}");
+
+        string? orgSeenByTool = null;
+        var tool = new CallbackTool("spy_tool", (args, _) =>
+        {
+            orgSeenByTool = args.TryGetProperty("organization", out var o) ? o.GetString() : null;
+            return Task.FromResult(new McpToolResult("ok"));
+        });
+
+        var mw = new CustomToolMiddleware(
+            _ => Task.CompletedTask, new[] { (ICustomMcpTool)tool },
+            new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
+
+        await mw.InvokeAsync(ctx, Encryptor(), WorkingEntra(), Options("Enate"));
+
+        orgSeenByTool.Should().Be("Enate");
+    }
+
+    [Fact]
     public async Task Does_not_override_a_caller_supplied_organization_with_the_default()
     {
         var ctx = ContextForToolCall("spy_tool", "{\"organization\":\"Contoso\"}");

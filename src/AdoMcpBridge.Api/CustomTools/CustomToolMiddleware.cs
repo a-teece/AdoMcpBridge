@@ -262,9 +262,11 @@ internal sealed class CustomToolMiddleware
     /// Fills in a missing <c>organization</c> argument from the configured default so callers
     /// need not pass it on every native-tool call. Returns <paramref name="arguments"/>
     /// unchanged when no default is configured, the args are not a JSON object, or the caller
-    /// already supplied a non-empty string <c>organization</c> — a caller-supplied value is
-    /// never overridden. Injecting an ignored <c>organization</c> into a tool that does not
-    /// read it is harmless, so this is a blanket inject-when-missing.
+    /// already supplied a non-whitespace string <c>organization</c> — a caller-supplied value
+    /// is never overridden. A whitespace-only <c>organization</c> is treated as absent and
+    /// replaced by the default, matching how <c>ToolArgs.RequireString</c> (which rejects on
+    /// <c>IsNullOrWhiteSpace</c>) treats it downstream. Injecting an ignored <c>organization</c>
+    /// into a tool that does not read it is harmless, so this is a blanket inject-when-missing.
     /// </summary>
     private static JsonElement ApplyDefaultOrganization(JsonElement arguments, string defaultOrganization)
     {
@@ -275,7 +277,7 @@ internal sealed class CustomToolMiddleware
 
         if (arguments.TryGetProperty("organization", out var existing) &&
             existing.ValueKind == JsonValueKind.String &&
-            !string.IsNullOrEmpty(existing.GetString()))
+            !string.IsNullOrWhiteSpace(existing.GetString()))
         {
             return arguments;
         }
