@@ -28,7 +28,7 @@ internal sealed class DefaultOrgPathMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        if (!string.IsNullOrEmpty(_defaultOrganization))
+        if (!string.IsNullOrWhiteSpace(_defaultOrganization))
         {
             var path = context.Request.Path;
 

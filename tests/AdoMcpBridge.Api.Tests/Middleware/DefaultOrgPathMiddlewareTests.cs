@@ -71,4 +71,15 @@ public sealed class DefaultOrgPathMiddlewareTests
         path.Should().Be("/mcp");
         nextCalled.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task Leaves_bare_mcp_unchanged_when_default_is_whitespace_only()
+    {
+        // A whitespace-only configured org is treated as absent — consistent with the
+        // native-tool path (CustomToolMiddleware.ApplyDefaultOrganization uses IsNullOrWhiteSpace).
+        var (path, nextCalled) = await RunAsync("/mcp", "   ");
+
+        path.Should().Be("/mcp");
+        nextCalled.Should().BeTrue();
+    }
 }
