@@ -242,16 +242,31 @@ public class AddCommentToolTests
     }
 
     [Fact]
-    public async Task Returns_error_on_ado_http_failure()
+    public async Task Returns_error_surfacing_ado_status_and_message_on_non_success()
     {
         _ado.AddWorkItemCommentAsync(
                 Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(),
                 Arg.Any<bool>(), Arg.Any<CancellationToken>())
-            .Returns<JsonElement>(_ => throw new HttpRequestException("500"));
+            .Returns<JsonElement>(_ => throw new AdoRestException(404, "TF401232: work item 42 does not exist"));
 
         var result = await CreateTool().InvokeAsync(Args(new() { ["text"] = "hi" }), default);
 
         result.IsError.Should().BeTrue();
-        result.Text.Should().Contain("ADO request failed");
+        result.Text.Should().Contain("HTTP 404");
+        result.Text.Should().Contain("TF401232");
+    }
+
+    [Fact]
+    public async Task Returns_transport_error_on_transport_failure()
+    {
+        _ado.AddWorkItemCommentAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(),
+                Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns<JsonElement>(_ => throw new HttpRequestException("connection reset"));
+
+        var result = await CreateTool().InvokeAsync(Args(new() { ["text"] = "hi" }), default);
+
+        result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("ADO request failed (transport)");
     }
 }

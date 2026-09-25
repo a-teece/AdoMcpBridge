@@ -57,8 +57,8 @@ internal sealed class ApprovalsListTool : ICustomMcpTool
 
     public async Task<McpToolResult> InvokeAsync(JsonElement arguments, CancellationToken ct)
     {
-        var org = arguments.GetProperty("organization").GetString()!;
-        var project = arguments.GetProperty("project").GetString()!;
+        var org = ToolArgs.RequireString(arguments, "organization");
+        var project = ToolArgs.RequireString(arguments, "project");
         var state = arguments.TryGetProperty("state", out var stateEl) ? stateEl.GetString() : null;
         var approvalIds = ReadStringArray(arguments, "approvalIds");
         var userIds = ReadStringArray(arguments, "userIds");
@@ -76,9 +76,14 @@ internal sealed class ApprovalsListTool : ICustomMcpTool
                 .QueryApprovalsAsync(org, project, approvalIds, state, userIds, top, expand, ct)
                 .ConfigureAwait(false);
         }
+        catch (AdoRestException ex)
+        {
+            return new McpToolResult(
+                $"Azure DevOps returned HTTP {ex.StatusCode}: {ex.Message}", IsError: true);
+        }
         catch (HttpRequestException ex)
         {
-            return new McpToolResult($"ADO request failed: {ex.Message}", IsError: true);
+            return new McpToolResult($"ADO request failed (transport): {ex.Message}", IsError: true);
         }
 
         using var ms = new MemoryStream();

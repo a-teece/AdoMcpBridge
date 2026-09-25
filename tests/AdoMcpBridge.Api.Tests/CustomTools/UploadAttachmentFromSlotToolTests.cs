@@ -121,18 +121,34 @@ public sealed class UploadAttachmentFromSlotToolTests
     }
 
     [Fact]
-    public async Task Returns_error_when_attachment_upload_fails()
+    public async Task Returns_error_surfacing_ado_status_and_message_on_non_success()
     {
         StubSlotBytes(Utf8("hello"));
         _ado.CreateAttachmentAsync(
                 Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<byte[]>(),
                 Arg.Any<CancellationToken>())
-            .Throws(new HttpRequestException("boom"));
+            .Throws(new AdoRestException(413, "attachment too large"));
 
         var result = await CreateTool().InvokeAsync(Args(), CancellationToken.None);
 
         result.IsError.Should().BeTrue();
-        result.Text.Should().Contain("ADO attachment upload failed");
+        result.Text.Should().Contain("HTTP 413");
+        result.Text.Should().Contain("attachment too large");
+    }
+
+    [Fact]
+    public async Task Returns_transport_error_when_upload_transport_fails()
+    {
+        StubSlotBytes(Utf8("hello"));
+        _ado.CreateAttachmentAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<byte[]>(),
+                Arg.Any<CancellationToken>())
+            .Throws(new HttpRequestException("connection reset"));
+
+        var result = await CreateTool().InvokeAsync(Args(), CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("ADO request failed (transport)");
     }
 
     [Fact]
@@ -155,6 +171,27 @@ public sealed class UploadAttachmentFromSlotToolTests
         json.GetProperty("status").GetString().Should().Be("UPLOADED_LINK_FAILED");
         json.GetProperty("attachmentId").GetString().Should().Be("att-id");
         json.GetProperty("attachmentUrl").GetString().Should().Be("att-url");
+    }
+
+    [Fact]
+    public async Task Reports_upload_link_failed_when_the_link_returns_an_ado_error()
+    {
+        StubSlotBytes(Utf8("hello"));
+        _ado.CreateAttachmentAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<byte[]>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new AdoAttachmentRef("att-id", "att-url"));
+        _ado.AddWorkItemAttachmentAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<string?>(),
+                Arg.Any<CancellationToken>())
+            .Throws(new AdoRestException(404, "work item 42 does not exist"));
+
+        var result = await CreateTool().InvokeAsync(Args(workItemId: 42), CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        var json = JsonDocument.Parse(result.Text).RootElement;
+        json.GetProperty("status").GetString().Should().Be("UPLOADED_LINK_FAILED");
+        json.GetProperty("error").GetString().Should().Contain("work item 42 does not exist");
     }
 
     [Fact]

@@ -87,17 +87,33 @@ public class ApprovalsApproveToolTests
     }
 
     [Fact]
-    public async Task InvokeAsync_returns_error_on_ado_http_failure()
+    public async Task InvokeAsync_surfaces_ado_status_and_message_on_non_success()
     {
         _ado.UpdateApprovalsAsync(
                 Arg.Any<string>(), Arg.Any<string>(),
                 Arg.Any<IReadOnlyList<ApprovalUpdate>>(), Arg.Any<CancellationToken>())
-            .Returns<IReadOnlyList<JsonElement>>(_ => throw new HttpRequestException("403 Forbidden"));
+            .Returns<IReadOnlyList<JsonElement>>(_ => throw new AdoRestException(403, "not an assigned approver"));
 
         var result = await CreateTool().InvokeAsync(
             Args(new { organization = "org", project = "proj", approvalId = "a1" }), default);
 
         result.IsError.Should().BeTrue();
-        result.Text.Should().Contain("ADO request failed");
+        result.Text.Should().Contain("HTTP 403");
+        result.Text.Should().Contain("not an assigned approver");
+    }
+
+    [Fact]
+    public async Task InvokeAsync_returns_transport_error_on_transport_failure()
+    {
+        _ado.UpdateApprovalsAsync(
+                Arg.Any<string>(), Arg.Any<string>(),
+                Arg.Any<IReadOnlyList<ApprovalUpdate>>(), Arg.Any<CancellationToken>())
+            .Returns<IReadOnlyList<JsonElement>>(_ => throw new HttpRequestException("connection reset"));
+
+        var result = await CreateTool().InvokeAsync(
+            Args(new { organization = "org", project = "proj", approvalId = "a1" }), default);
+
+        result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("ADO request failed (transport)");
     }
 }

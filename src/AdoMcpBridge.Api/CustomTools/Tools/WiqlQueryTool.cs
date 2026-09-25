@@ -55,19 +55,15 @@ internal sealed class WiqlQueryTool : ICustomMcpTool
 
     public async Task<McpToolResult> InvokeAsync(JsonElement arguments, CancellationToken ct)
     {
-        var org = arguments.TryGetProperty("organization", out var orgEl) ? orgEl.GetString() : null;
-        var wiql = arguments.TryGetProperty("wiql", out var wiqlEl) ? wiqlEl.GetString() : null;
-        var project = arguments.TryGetProperty("project", out var projEl) ? projEl.GetString() : null;
-        var team = arguments.TryGetProperty("team", out var teamEl) ? teamEl.GetString() : null;
-        int? top = arguments.TryGetProperty("top", out var topEl) ? topEl.GetInt32() : null;
+        var org = ToolArgs.RequireString(arguments, "organization");
+        var wiql = ToolArgs.RequireString(arguments, "wiql");
+        var project = ToolArgs.GetString(arguments, "project");
+        var team = ToolArgs.GetString(arguments, "team");
+        var top = ToolArgs.GetInt(arguments, "top");
         bool? timePrecision = arguments.TryGetProperty("timePrecision", out var tpEl)
             ? tpEl.GetBoolean()
             : null;
 
-        if (string.IsNullOrWhiteSpace(org))
-            return new McpToolResult("organization is required.", IsError: true);
-        if (string.IsNullOrWhiteSpace(wiql))
-            return new McpToolResult("wiql is required.", IsError: true);
         if (!string.IsNullOrWhiteSpace(team) && string.IsNullOrWhiteSpace(project))
             return new McpToolResult("team is only valid together with project.", IsError: true);
         if (top is < 1 or > MaxTop)
@@ -84,16 +80,17 @@ internal sealed class WiqlQueryTool : ICustomMcpTool
         {
             // Request one extra so we can detect (and flag) truncation past effectiveTop.
             result = await _ado
-                .QueryByWiqlAsync(org, project, team, wiql!, effectiveTop + 1, timePrecision, ct)
+                .QueryByWiqlAsync(org, project, team, wiql, effectiveTop + 1, timePrecision, ct)
                 .ConfigureAwait(false);
         }
-        catch (AdoWiqlQueryException ex)
+        catch (AdoRestException ex)
         {
-            return new McpToolResult($"WIQL query rejected by Azure DevOps: {ex.Message}", IsError: true);
+            return new McpToolResult(
+                $"Azure DevOps returned HTTP {ex.StatusCode}: {ex.Message}", IsError: true);
         }
         catch (HttpRequestException ex)
         {
-            return new McpToolResult($"ADO request failed: {ex.Message}", IsError: true);
+            return new McpToolResult($"ADO request failed (transport): {ex.Message}", IsError: true);
         }
 
         return new McpToolResult(BuildSlimJson(result, effectiveTop));

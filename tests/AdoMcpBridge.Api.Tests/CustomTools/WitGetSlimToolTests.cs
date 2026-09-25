@@ -166,17 +166,32 @@ public class WitGetSlimToolTests
     }
 
     [Fact]
-    public async Task InvokeAsync_returns_error_on_ado_http_failure()
+    public async Task InvokeAsync_surfaces_ado_status_and_message_on_non_success()
     {
         _ado.GetWorkItemAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns<JsonElement?>(_ => throw new HttpRequestException("401 Unauthorized"));
+            .Returns<JsonElement?>(_ => throw new AdoRestException(401, "TF400813: not authorized"));
         _cache.GetLongTextFieldRefNamesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(new HashSet<string>());
 
         var result = await CreateTool().InvokeAsync(MakeArgs("org", "proj", 1), default);
 
         result.IsError.Should().BeTrue();
-        result.Text.Should().Contain("ADO request failed");
+        result.Text.Should().Contain("HTTP 401");
+        result.Text.Should().Contain("TF400813");
+    }
+
+    [Fact]
+    public async Task InvokeAsync_returns_transport_error_on_transport_failure()
+    {
+        _ado.GetWorkItemAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns<JsonElement?>(_ => throw new HttpRequestException("connection reset"));
+        _cache.GetLongTextFieldRefNamesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new HashSet<string>());
+
+        var result = await CreateTool().InvokeAsync(MakeArgs("org", "proj", 1), default);
+
+        result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("ADO request failed (transport)");
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

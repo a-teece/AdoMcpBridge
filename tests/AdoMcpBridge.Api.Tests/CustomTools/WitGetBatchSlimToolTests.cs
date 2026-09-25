@@ -25,6 +25,52 @@ public class WitGetBatchSlimToolTests
     }
 
     [Fact]
+    public async Task InvokeAsync_throws_caller_argument_exception_when_ids_absent()
+    {
+        var args = JsonDocument.Parse("{\"organization\":\"org\",\"project\":\"proj\"}").RootElement.Clone();
+
+        var act = () => CreateTool().InvokeAsync(args, default);
+
+        await act.Should().ThrowAsync<CallerArgumentException>()
+            .WithMessage("'ids' is required and must be an array of integers.");
+    }
+
+    [Fact]
+    public async Task InvokeAsync_throws_caller_argument_exception_when_ids_not_an_array()
+    {
+        var args = JsonDocument.Parse("{\"organization\":\"org\",\"project\":\"proj\",\"ids\":42}")
+            .RootElement.Clone();
+
+        var act = () => CreateTool().InvokeAsync(args, default);
+
+        await act.Should().ThrowAsync<CallerArgumentException>()
+            .WithMessage("'ids' is required and must be an array of integers.");
+    }
+
+    [Fact]
+    public async Task InvokeAsync_throws_caller_argument_exception_when_organization_omitted()
+    {
+        var args = JsonDocument.Parse("{\"project\":\"proj\",\"ids\":[1]}").RootElement.Clone();
+
+        var act = () => CreateTool().InvokeAsync(args, default);
+
+        await act.Should().ThrowAsync<CallerArgumentException>()
+            .WithMessage("'organization' is required and must be a non-empty string.");
+    }
+
+    [Fact]
+    public async Task InvokeAsync_throws_caller_argument_exception_when_ids_contains_a_non_integer_element()
+    {
+        var args = JsonDocument.Parse("{\"organization\":\"org\",\"project\":\"proj\",\"ids\":[\"a\"]}")
+            .RootElement.Clone();
+
+        var act = () => CreateTool().InvokeAsync(args, default);
+
+        await act.Should().ThrowAsync<CallerArgumentException>()
+            .WithMessage("'ids' must be an array of integers.");
+    }
+
+    [Fact]
     public async Task InvokeAsync_returns_error_when_ids_exceed_200()
     {
         var ids = Enumerable.Range(1, 201).ToArray();
@@ -65,17 +111,32 @@ public class WitGetBatchSlimToolTests
     }
 
     [Fact]
-    public async Task InvokeAsync_returns_error_on_ado_http_failure()
+    public async Task InvokeAsync_surfaces_ado_status_and_message_on_non_success()
     {
         _ado.GetWorkItemsBatchAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<int>>(), Arg.Any<CancellationToken>())
-            .Returns<IReadOnlyList<JsonElement>>(_ => throw new HttpRequestException("503 Service Unavailable"));
+            .Returns<IReadOnlyList<JsonElement>>(_ => throw new AdoRestException(503, "service unavailable"));
         _cache.GetLongTextFieldRefNamesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(new HashSet<string>());
 
         var result = await CreateTool().InvokeAsync(MakeArgs("org", "proj", 1, 2), default);
 
         result.IsError.Should().BeTrue();
-        result.Text.Should().Contain("ADO request failed");
+        result.Text.Should().Contain("HTTP 503");
+        result.Text.Should().Contain("service unavailable");
+    }
+
+    [Fact]
+    public async Task InvokeAsync_returns_transport_error_on_transport_failure()
+    {
+        _ado.GetWorkItemsBatchAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<int>>(), Arg.Any<CancellationToken>())
+            .Returns<IReadOnlyList<JsonElement>>(_ => throw new HttpRequestException("connection reset"));
+        _cache.GetLongTextFieldRefNamesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new HashSet<string>());
+
+        var result = await CreateTool().InvokeAsync(MakeArgs("org", "proj", 1, 2), default);
+
+        result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("ADO request failed (transport)");
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

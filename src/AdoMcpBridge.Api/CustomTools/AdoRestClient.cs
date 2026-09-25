@@ -135,7 +135,7 @@ public interface IAdoRestClient
     /// <c>$top</c> query param and <paramref name="timePrecision"/> to
     /// <c>timePrecision</c>; both are omitted when <see langword="null"/>.
     /// On a 4xx response the ADO error <c>message</c> (e.g. a WIQL syntax error)
-    /// is surfaced via <see cref="AdoWiqlQueryException"/> so the caller can
+    /// is surfaced via <see cref="AdoRestException"/> so the caller can
     /// correct its query; other non-success statuses throw the same way.
     /// </summary>
     Task<JsonElement> QueryByWiqlAsync(
@@ -153,11 +153,16 @@ public sealed record AdoAttachmentContent(byte[] Content, string ContentType);
 public sealed record AdoAttachmentRef(string Id, string Url);
 
 /// <summary>
-/// Carries the Azure DevOps error <c>message</c> from a failed WIQL execution so
-/// the calling agent sees the actual WIQL syntax/semantic error text (not a
-/// generic transport failure) and can correct its query.
+/// Carries the HTTP status and the Azure DevOps error <c>message</c> from a failed
+/// REST call so the calling tool can surface the actual reason (a field-validation
+/// message, a WIQL syntax error, a permission failure, …) rather than a generic
+/// transport failure. <see cref="StatusCode"/> is the HTTP status ADO returned.
 /// </summary>
-public sealed class AdoWiqlQueryException(string message) : Exception(message);
+public sealed class AdoRestException(int statusCode, string message) : Exception(message)
+{
+    /// <summary>The HTTP status code Azure DevOps returned with the failure.</summary>
+    public int StatusCode { get; } = statusCode;
+}
 
 internal sealed class AdoRestClient : IAdoRestClient
 {
@@ -189,7 +194,7 @@ internal sealed class AdoRestClient : IAdoRestClient
             var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             _logger.LogWarning("ADO GET WI {Id} field {Field} returned {Status}: {Body}",
                 workItemId, fieldRefName, (int)res.StatusCode, err);
-            res.EnsureSuccessStatusCode(); // throws HttpRequestException
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
         }
 
         var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -232,7 +237,7 @@ internal sealed class AdoRestClient : IAdoRestClient
             var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             _logger.LogWarning("ADO PATCH WI {Id} field {Field} returned {Status}: {Body}",
                 workItemId, fieldRefName, (int)res.StatusCode, err);
-            res.EnsureSuccessStatusCode();
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
         }
     }
 
@@ -252,7 +257,7 @@ internal sealed class AdoRestClient : IAdoRestClient
         {
             var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             _logger.LogWarning("ADO GET WI {Id} returned {Status}: {Body}", id, (int)res.StatusCode, err);
-            res.EnsureSuccessStatusCode();
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
         }
 
         var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -278,7 +283,7 @@ internal sealed class AdoRestClient : IAdoRestClient
             var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             _logger.LogWarning("ADO GET attachment {AttachmentId} in {Org}/{Project} returned {Status}: {Body}",
                 attachmentId, org, project, (int)res.StatusCode, err);
-            res.EnsureSuccessStatusCode();
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
         }
 
         var bytes = await res.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
@@ -304,7 +309,7 @@ internal sealed class AdoRestClient : IAdoRestClient
             var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             _logger.LogWarning("ADO POST attachment {FileName} in {Org}/{Project} returned {Status}: {Body}",
                 fileName, org, project, (int)res.StatusCode, err);
-            res.EnsureSuccessStatusCode();
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
         }
 
         var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -348,7 +353,7 @@ internal sealed class AdoRestClient : IAdoRestClient
             var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             _logger.LogWarning("ADO PATCH WI {Id} add attachment relation in {Org}/{Project} returned {Status}: {Body}",
                 workItemId, org, project, (int)res.StatusCode, err);
-            res.EnsureSuccessStatusCode();
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
         }
     }
 
@@ -370,7 +375,7 @@ internal sealed class AdoRestClient : IAdoRestClient
         {
             var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             _logger.LogWarning("ADO WI batch returned {Status}: {Body}", (int)res.StatusCode, err);
-            res.EnsureSuccessStatusCode();
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
         }
 
         var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -396,7 +401,7 @@ internal sealed class AdoRestClient : IAdoRestClient
         {
             var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             _logger.LogWarning("ADO GET fields for {Org} returned {Status}: {Body}", org, (int)res.StatusCode, err);
-            res.EnsureSuccessStatusCode();
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
         }
 
         var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -444,7 +449,7 @@ internal sealed class AdoRestClient : IAdoRestClient
             var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             _logger.LogWarning("ADO GET comments WI {Id} returned {Status}: {Body}",
                 workItemId, (int)res.StatusCode, err);
-            res.EnsureSuccessStatusCode();
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
         }
 
         var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -475,7 +480,7 @@ internal sealed class AdoRestClient : IAdoRestClient
             var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             _logger.LogWarning("ADO GET comment {CommentId} on WI {Id} returned {Status}: {Body}",
                 commentId, workItemId, (int)res.StatusCode, err);
-            res.EnsureSuccessStatusCode();
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
         }
 
         var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -506,7 +511,7 @@ internal sealed class AdoRestClient : IAdoRestClient
             var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             _logger.LogWarning("ADO POST comment on WI {Id} returned {Status}: {Body}",
                 workItemId, (int)res.StatusCode, err);
-            res.EnsureSuccessStatusCode();
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
         }
 
         var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -542,7 +547,7 @@ internal sealed class AdoRestClient : IAdoRestClient
             var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             _logger.LogWarning("ADO query approvals in {Org}/{Project} returned {Status}: {Body}",
                 org, project, (int)res.StatusCode, err);
-            res.EnsureSuccessStatusCode();
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
         }
 
         var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -576,7 +581,7 @@ internal sealed class AdoRestClient : IAdoRestClient
             var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             _logger.LogWarning("ADO GET approval {Id} returned {Status}: {Body}",
                 approvalId, (int)res.StatusCode, err);
-            res.EnsureSuccessStatusCode();
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
         }
 
         var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -607,7 +612,7 @@ internal sealed class AdoRestClient : IAdoRestClient
             var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             _logger.LogWarning("ADO update approvals in {Org}/{Project} returned {Status}: {Body}",
                 org, project, (int)res.StatusCode, err);
-            res.EnsureSuccessStatusCode();
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
         }
 
         var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -643,7 +648,7 @@ internal sealed class AdoRestClient : IAdoRestClient
         {
             var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             _logger.LogWarning("ADO WIQL query in {Org} returned {Status}.", org, (int)res.StatusCode);
-            throw new AdoWiqlQueryException(ExtractErrorMessage(err, res.StatusCode));
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
         }
 
         var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -651,9 +656,10 @@ internal sealed class AdoRestClient : IAdoRestClient
         return doc.RootElement.Clone();
     }
 
-    // ADO 4xx bodies carry the human-readable failure (e.g. WIQL syntax errors) in
-    // a top-level "message" property. Fall back to the raw body / status when the
-    // response is not the shape we expect, so no failure is silently swallowed.
+    // ADO error bodies carry the human-readable failure (field-validation messages,
+    // WIQL syntax errors, …) in a top-level "message" property. Fall back to the raw
+    // body / status when the response is not the shape we expect, so no failure is
+    // silently swallowed.
     private static string ExtractErrorMessage(string body, System.Net.HttpStatusCode status)
     {
         if (!string.IsNullOrWhiteSpace(body))
@@ -677,7 +683,7 @@ internal sealed class AdoRestClient : IAdoRestClient
             return body;
         }
 
-        return $"ADO WIQL query failed with status {(int)status}.";
+        return $"Azure DevOps request failed with status {(int)status}.";
     }
 
     private HttpRequestMessage BuildRequest(HttpMethod method, string url, HttpContent? body)

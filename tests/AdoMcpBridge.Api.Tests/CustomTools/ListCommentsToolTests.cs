@@ -57,14 +57,27 @@ public class ListCommentsToolTests
     }
 
     [Fact]
-    public async Task Returns_error_on_ado_http_failure()
+    public async Task Returns_error_surfacing_ado_status_and_message_on_non_success()
     {
         _ado.GetWorkItemCommentsAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns<IReadOnlyList<JsonElement>>(_ => throw new HttpRequestException("500"));
+            .Returns<IReadOnlyList<JsonElement>>(_ => throw new AdoRestException(500, "server error"));
 
         var result = await CreateTool().InvokeAsync(Args(), default);
 
         result.IsError.Should().BeTrue();
-        result.Text.Should().Contain("ADO request failed");
+        result.Text.Should().Contain("HTTP 500");
+        result.Text.Should().Contain("server error");
+    }
+
+    [Fact]
+    public async Task Returns_transport_error_on_transport_failure()
+    {
+        _ado.GetWorkItemCommentsAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns<IReadOnlyList<JsonElement>>(_ => throw new HttpRequestException("connection reset"));
+
+        var result = await CreateTool().InvokeAsync(Args(), default);
+
+        result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("ADO request failed (transport)");
     }
 }

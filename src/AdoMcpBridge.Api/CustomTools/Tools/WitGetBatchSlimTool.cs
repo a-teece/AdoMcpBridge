@@ -48,11 +48,20 @@ internal sealed class WitGetBatchSlimTool : ICustomMcpTool
 
     public async Task<McpToolResult> InvokeAsync(JsonElement arguments, CancellationToken ct)
     {
-        var org = arguments.GetProperty("organization").GetString()!;
-        var project = arguments.GetProperty("project").GetString()!;
-        var ids = arguments.GetProperty("ids")
-            .EnumerateArray()
-            .Select(e => e.GetInt32())
+        var org = ToolArgs.RequireString(arguments, "organization");
+        var project = ToolArgs.RequireString(arguments, "project");
+
+        if (arguments.ValueKind != JsonValueKind.Object ||
+            !arguments.TryGetProperty("ids", out var idsEl) ||
+            idsEl.ValueKind != JsonValueKind.Array)
+        {
+            throw new CallerArgumentException("'ids' is required and must be an array of integers.");
+        }
+
+        var ids = idsEl.EnumerateArray()
+            .Select(e => e.ValueKind == JsonValueKind.Number && e.TryGetInt32(out var id)
+                ? id
+                : throw new CallerArgumentException("'ids' must be an array of integers."))
             .ToList();
 
         if (ids.Count == 0)
@@ -75,9 +84,14 @@ internal sealed class WitGetBatchSlimTool : ICustomMcpTool
             workItems = await witsTask;
             longTextFields = await typesTask;
         }
+        catch (AdoRestException ex)
+        {
+            return new McpToolResult(
+                $"Azure DevOps returned HTTP {ex.StatusCode}: {ex.Message}", IsError: true);
+        }
         catch (HttpRequestException ex)
         {
-            return new McpToolResult($"ADO request failed: {ex.Message}", IsError: true);
+            return new McpToolResult($"ADO request failed (transport): {ex.Message}", IsError: true);
         }
 
         using var ms = new MemoryStream();

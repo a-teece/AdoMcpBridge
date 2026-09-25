@@ -36,10 +36,10 @@ internal sealed class GetCommentTool : ICustomMcpTool
 
     public async Task<McpToolResult> InvokeAsync(JsonElement arguments, CancellationToken ct)
     {
-        var org = arguments.GetProperty("organization").GetString()!;
-        var project = arguments.GetProperty("project").GetString()!;
-        var workItemId = arguments.GetProperty("workItemId").GetInt32();
-        var commentId = arguments.GetProperty("commentId").GetInt32();
+        var org = ToolArgs.RequireString(arguments, "organization");
+        var project = ToolArgs.RequireString(arguments, "project");
+        var workItemId = ToolArgs.RequireInt(arguments, "workItemId");
+        var commentId = ToolArgs.RequireInt(arguments, "commentId");
 
         _logger.LogInformation(
             "ado_bridge_get_comment: WI {Id} comment {CommentId}", workItemId, commentId);
@@ -50,9 +50,14 @@ internal sealed class GetCommentTool : ICustomMcpTool
             comment = await _ado.GetWorkItemCommentAsync(org, project, workItemId, commentId, ct)
                                 .ConfigureAwait(false);
         }
+        catch (AdoRestException ex)
+        {
+            return new McpToolResult(
+                $"Azure DevOps returned HTTP {ex.StatusCode}: {ex.Message}", IsError: true);
+        }
         catch (HttpRequestException ex)
         {
-            return new McpToolResult($"ADO request failed: {ex.Message}", IsError: true);
+            return new McpToolResult($"ADO request failed (transport): {ex.Message}", IsError: true);
         }
 
         if (comment is null)

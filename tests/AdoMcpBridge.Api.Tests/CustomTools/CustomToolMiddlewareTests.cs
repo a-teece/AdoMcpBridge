@@ -125,6 +125,65 @@ public sealed class CustomToolMiddlewareTests
         error.GetProperty("message").GetString().Should().Be("ADO authentication failed");
     }
 
+    private static IEntraTokenClient WorkingEntra()
+    {
+        var entra = Substitute.For<IEntraTokenClient>();
+        entra.AcquireAdoRestTokenAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new ValueTask<EntraTokenResult>(new EntraTokenResult(
+                AccessToken: "ado-rest-token",
+                RefreshToken: "new-refresh",
+                ExpiresAt: DateTimeOffset.UtcNow.AddMinutes(50),
+                UserObjectId: "oid",
+                UserPrincipalName: "u@example.com")));
+        return entra;
+    }
+
+    [Fact]
+    public async Task Maps_caller_argument_exception_to_invalid_params_with_the_message()
+    {
+        var ctx = ContextForToolCall("spy_tool");
+
+        var tool = new CallbackTool("spy_tool", (_, _) =>
+            throw new CallerArgumentException("'organization' is required and must be a non-empty string."));
+
+        var mw = new CustomToolMiddleware(
+            _ => Task.CompletedTask, new[] { (ICustomMcpTool)tool },
+            new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
+
+        await mw.InvokeAsync(ctx, Encryptor(), WorkingEntra());
+
+        ctx.Response.Body.Seek(0, SeekOrigin.Begin);
+        var responseText = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
+        using var doc = JsonDocument.Parse(responseText);
+        var error = doc.RootElement.GetProperty("error");
+        error.GetProperty("code").GetInt32().Should().Be(-32602);
+        error.GetProperty("message").GetString().Should()
+            .Be("'organization' is required and must be a non-empty string.");
+    }
+
+    [Fact]
+    public async Task Maps_unrelated_tool_exception_to_internal_error_without_leaking_detail()
+    {
+        var ctx = ContextForToolCall("spy_tool");
+
+        var tool = new CallbackTool("spy_tool", (_, _) =>
+            throw new InvalidOperationException("secret internal detail"));
+
+        var mw = new CustomToolMiddleware(
+            _ => Task.CompletedTask, new[] { (ICustomMcpTool)tool },
+            new McpSessionRegistry(), NullLogger<CustomToolMiddleware>.Instance);
+
+        await mw.InvokeAsync(ctx, Encryptor(), WorkingEntra());
+
+        ctx.Response.Body.Seek(0, SeekOrigin.Begin);
+        var responseText = await new StreamReader(ctx.Response.Body).ReadToEndAsync();
+        responseText.Should().NotContain("secret internal detail");
+        using var doc = JsonDocument.Parse(responseText);
+        var error = doc.RootElement.GetProperty("error");
+        error.GetProperty("code").GetInt32().Should().Be(-32603);
+        error.GetProperty("message").GetString().Should().Be("Internal error");
+    }
+
     private static DefaultHttpContext ContextForWitWorkItemWriteCall(string argumentsJson)
     {
         var body =

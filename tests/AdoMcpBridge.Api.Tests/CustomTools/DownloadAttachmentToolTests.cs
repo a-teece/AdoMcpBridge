@@ -142,17 +142,32 @@ public sealed class DownloadAttachmentToolTests
     // ── failure paths ────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Returns_error_when_ado_download_fails()
+    public async Task Returns_error_surfacing_ado_status_and_message_on_non_success()
     {
         _ado.DownloadAttachmentAsync(
                 Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(),
                 Arg.Any<CancellationToken>())
-            .Throws(new HttpRequestException("boom"));
+            .Throws(new AdoRestException(404, "attachment not found"));
 
         var result = await CreateTool().InvokeAsync(Args(id: Guid1), CancellationToken.None);
 
         result.IsError.Should().BeTrue();
-        result.Text.Should().Contain("ADO attachment download failed");
+        result.Text.Should().Contain("HTTP 404");
+        result.Text.Should().Contain("attachment not found");
+    }
+
+    [Fact]
+    public async Task Returns_transport_error_when_ado_download_transport_fails()
+    {
+        _ado.DownloadAttachmentAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(),
+                Arg.Any<CancellationToken>())
+            .Throws(new HttpRequestException("connection reset"));
+
+        var result = await CreateTool().InvokeAsync(Args(id: Guid1), CancellationToken.None);
+
+        result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("ADO request failed (transport)");
     }
 
     [Fact]

@@ -35,10 +35,10 @@ internal sealed class DownloadFieldTool : ICustomMcpTool
 
     public async Task<McpToolResult> InvokeAsync(JsonElement arguments, CancellationToken ct)
     {
-        var org = arguments.GetProperty("organization").GetString()!;
-        var project = arguments.GetProperty("project").GetString()!;
-        var workItemId = arguments.GetProperty("workItemId").GetInt32();
-        var fieldRef = arguments.GetProperty("fieldRefName").GetString()!;
+        var org = ToolArgs.RequireString(arguments, "organization");
+        var project = ToolArgs.RequireString(arguments, "project");
+        var workItemId = ToolArgs.RequireInt(arguments, "workItemId");
+        var fieldRef = ToolArgs.RequireString(arguments, "fieldRefName");
 
         _logger.LogInformation(
             "ado_bridge_download_field: WI {Id} field {Field}", workItemId, fieldRef);
@@ -48,9 +48,14 @@ internal sealed class DownloadFieldTool : ICustomMcpTool
         {
             raw = await _ado.GetFieldAsync(org, project, workItemId, fieldRef, ct).ConfigureAwait(false);
         }
+        catch (AdoRestException ex)
+        {
+            return new McpToolResult(
+                $"Azure DevOps returned HTTP {ex.StatusCode}: {ex.Message}", IsError: true);
+        }
         catch (HttpRequestException ex)
         {
-            return new McpToolResult($"ADO request failed: {ex.Message}", IsError: true);
+            return new McpToolResult($"ADO request failed (transport): {ex.Message}", IsError: true);
         }
 
         if (raw is null)
