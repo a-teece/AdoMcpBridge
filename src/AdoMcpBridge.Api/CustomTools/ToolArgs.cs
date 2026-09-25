@@ -65,4 +65,24 @@ internal static class ToolArgs
            el.ValueKind == JsonValueKind.String
             ? el.GetString()
             : null;
+
+    /// <summary>
+    /// Returns the value of an optional integer argument, or <see langword="null"/> when
+    /// <paramref name="name"/> is absent or JSON null. Throws
+    /// <see cref="CallerArgumentException"/> when the property is present but not a JSON
+    /// number expressible as an <see cref="int"/>.
+    /// </summary>
+    public static int? GetInt(JsonElement args, string name)
+    {
+        if (args.ValueKind != JsonValueKind.Object || !args.TryGetProperty(name, out var el))
+            return null;
+
+        if (el.ValueKind == JsonValueKind.Null)
+            return null;
+
+        if (el.ValueKind == JsonValueKind.Number && el.TryGetInt32(out var value))
+            return value;
+
+        throw new CallerArgumentException($"'{name}' must be an integer.");
+    }
 }

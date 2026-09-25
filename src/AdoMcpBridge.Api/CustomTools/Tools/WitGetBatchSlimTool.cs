@@ -58,7 +58,11 @@ internal sealed class WitGetBatchSlimTool : ICustomMcpTool
             throw new CallerArgumentException("'ids' is required and must be an array of integers.");
         }
 
-        var ids = idsEl.EnumerateArray().Select(e => e.GetInt32()).ToList();
+        var ids = idsEl.EnumerateArray()
+            .Select(e => e.ValueKind == JsonValueKind.Number && e.TryGetInt32(out var id)
+                ? id
+                : throw new CallerArgumentException("'ids' must be an array of integers."))
+            .ToList();
 
         if (ids.Count == 0)
             return new McpToolResult("[]");

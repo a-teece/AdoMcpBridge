@@ -83,4 +83,31 @@ public class ToolArgsTests
     {
         ToolArgs.GetString(default, "project").Should().BeNull();
     }
+
+    // ── GetInt ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void GetInt_returns_the_value_when_present()
+    {
+        ToolArgs.GetInt(Parse("{\"top\":50}"), "top").Should().Be(50);
+    }
+
+    [Theory]
+    [InlineData("{}")]                // absent
+    [InlineData("{\"top\":null}")]    // JSON null
+    public void GetInt_returns_null_when_absent_or_null(string json)
+    {
+        ToolArgs.GetInt(Parse(json), "top").Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("{\"top\":\"50\"}")]  // string, not number
+    [InlineData("{\"top\":1.5}")]     // non-integer number
+    public void GetInt_throws_when_present_but_not_an_integer(string json)
+    {
+        var act = () => ToolArgs.GetInt(Parse(json), "top");
+
+        act.Should().Throw<CallerArgumentException>()
+            .WithMessage("'top' must be an integer.");
+    }
 }

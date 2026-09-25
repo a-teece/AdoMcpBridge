@@ -59,6 +59,18 @@ public class WitGetBatchSlimToolTests
     }
 
     [Fact]
+    public async Task InvokeAsync_throws_caller_argument_exception_when_ids_contains_a_non_integer_element()
+    {
+        var args = JsonDocument.Parse("{\"organization\":\"org\",\"project\":\"proj\",\"ids\":[\"a\"]}")
+            .RootElement.Clone();
+
+        var act = () => CreateTool().InvokeAsync(args, default);
+
+        await act.Should().ThrowAsync<CallerArgumentException>()
+            .WithMessage("'ids' must be an array of integers.");
+    }
+
+    [Fact]
     public async Task InvokeAsync_returns_error_when_ids_exceed_200()
     {
         var ids = Enumerable.Range(1, 201).ToArray();

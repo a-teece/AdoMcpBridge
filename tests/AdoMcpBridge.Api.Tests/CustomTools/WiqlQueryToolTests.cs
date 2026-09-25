@@ -266,21 +266,40 @@ public class WiqlQueryToolTests
     [Fact]
     public async Task InvokeAsync_rejects_missing_organization()
     {
-        var result = await CreateTool().InvokeAsync(Args(new { organization = "", wiql = "q" }), default);
+        var act = () => CreateTool().InvokeAsync(Args(new { organization = "", wiql = "q" }), default);
 
-        result.IsError.Should().BeTrue();
-        result.Text.Should().Contain("organization is required");
+        await act.Should().ThrowAsync<CallerArgumentException>()
+            .WithMessage("'organization' is required and must be a non-empty string.");
         await _ado.DidNotReceiveWithAnyArgs().QueryByWiqlAsync(
             default!, default, default, default!, default, default, default);
     }
 
     [Fact]
+    public async Task InvokeAsync_rejects_organization_as_a_json_number()
+    {
+        var act = () => CreateTool().InvokeAsync(Args(new { organization = 42, wiql = "q" }), default);
+
+        await act.Should().ThrowAsync<CallerArgumentException>()
+            .WithMessage("'organization' is required and must be a non-empty string.");
+    }
+
+    [Fact]
+    public async Task InvokeAsync_rejects_top_as_a_string()
+    {
+        var act = () => CreateTool().InvokeAsync(
+            Args(new { organization = "org", wiql = "q", top = "50" }), default);
+
+        await act.Should().ThrowAsync<CallerArgumentException>()
+            .WithMessage("'top' must be an integer.");
+    }
+
+    [Fact]
     public async Task InvokeAsync_rejects_missing_wiql()
     {
-        var result = await CreateTool().InvokeAsync(Args(new { organization = "org", wiql = "  " }), default);
+        var act = () => CreateTool().InvokeAsync(Args(new { organization = "org", wiql = "  " }), default);
 
-        result.IsError.Should().BeTrue();
-        result.Text.Should().Contain("wiql is required");
+        await act.Should().ThrowAsync<CallerArgumentException>()
+            .WithMessage("'wiql' is required and must be a non-empty string.");
     }
 
     [Fact]
