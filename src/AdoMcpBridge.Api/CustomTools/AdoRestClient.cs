@@ -116,6 +116,17 @@ public interface IAdoRestClient
         CancellationToken ct = default);
 
     /// <summary>
+    /// Updates an existing work-item comment by id and returns the updated comment element.
+    /// <paramref name="markdown"/> selects the stored comment format via ADO's
+    /// <c>format</c> query parameter (0 = Markdown, 1 = HTML): <c>true</c> stores
+    /// native Markdown so ADO renders it; <c>false</c> stores HTML. Requires the
+    /// 7.2-preview.4 comments API.
+    /// </summary>
+    Task<JsonElement> UpdateWorkItemCommentAsync(
+        string org, string project, int workItemId, int commentId, string text, bool markdown,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Queries pipeline stage/check approvals in a project. Only the supplied
     /// filters are applied; array filters are comma-joined. Returns the cloned
     /// <c>value[]</c> approval elements (empty when the response has none).
@@ -578,6 +589,36 @@ internal sealed class AdoRestClient : IAdoRestClient
             var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             _logger.LogWarning("ADO POST comment on WI {Id} returned {Status}: {Body}",
                 workItemId, (int)res.StatusCode, err);
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
+        }
+
+        var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.Clone();
+    }
+
+    public async Task<JsonElement> UpdateWorkItemCommentAsync(
+        string org, string project, int workItemId, int commentId, string text, bool markdown,
+        CancellationToken ct = default)
+    {
+        // format: 0 = Markdown, 1 = HTML (ADO's CommentFormat enum). It rides as a query
+        // parameter — the request body is still just { text }. Same convention as the add path.
+        var format = markdown ? 0 : 1;
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
+                  $"/{Uri.EscapeDataString(project)}/_apis/wit/workItems/{workItemId}/comments/{commentId}" +
+                  $"?format={format}&api-version={CommentsWriteApiVersion}";
+
+        var payload = JsonSerializer.Serialize(new { text });
+        var body = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        using var req = BuildRequest(HttpMethod.Patch, url, body);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            _logger.LogWarning("ADO PATCH comment {CommentId} on WI {Id} returned {Status}: {Body}",
+                commentId, workItemId, (int)res.StatusCode, err);
             throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
         }
 

@@ -423,6 +423,45 @@ public class AdoRestClientTests
         await act.Should().ThrowAsync<AdoRestException>();
     }
 
+    [Fact]
+    public async Task UpdateWorkItemCommentAsync_patches_markdown_with_format_0_and_returns_updated_comment()
+    {
+        var (client, handler) = CreateClient(Json("{\"id\":7,\"text\":\"edited\"}"));
+
+        var updated = await client.UpdateWorkItemCommentAsync("org", "proj", 42, 7, "edited", markdown: true);
+
+        updated.GetProperty("id").GetInt32().Should().Be(7);
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Patch);
+        handler.LastRequest.RequestUri!.AbsoluteUri.Should()
+            .Be("https://dev.azure.com/org/proj/_apis/wit/workItems/42/comments/7?format=0&api-version=7.2-preview.4");
+        using var sent = JsonDocument.Parse(handler.LastBody!);
+        sent.RootElement.GetProperty("text").GetString().Should().Be("edited");
+        handler.LastRequest.Headers.Authorization!.Parameter.Should().Be(CallerToken);
+    }
+
+    [Fact]
+    public async Task UpdateWorkItemCommentAsync_patches_html_with_format_1()
+    {
+        var (client, handler) = CreateClient(Json("{\"id\":7}"));
+
+        await client.UpdateWorkItemCommentAsync("org", "proj", 42, 7, "<b>edited</b>", markdown: false);
+
+        handler.LastRequest!.RequestUri!.AbsoluteUri.Should()
+            .Be("https://dev.azure.com/org/proj/_apis/wit/workItems/42/comments/7?format=1&api-version=7.2-preview.4");
+        using var sent = JsonDocument.Parse(handler.LastBody!);
+        sent.RootElement.GetProperty("text").GetString().Should().Be("<b>edited</b>");
+    }
+
+    [Fact]
+    public async Task UpdateWorkItemCommentAsync_throws_on_non_success()
+    {
+        var (client, _) = CreateClient(Json("bad", HttpStatusCode.BadRequest));
+
+        var act = () => client.UpdateWorkItemCommentAsync("org", "proj", 42, 7, "x", markdown: true);
+
+        await act.Should().ThrowAsync<AdoRestException>();
+    }
+
     // ── QueryByWiqlAsync ─────────────────────────────────────────────────────
 
     [Fact]

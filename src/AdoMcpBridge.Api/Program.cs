@@ -71,6 +71,7 @@ builder.Services.AddSingleton<ICustomMcpTool, WiqlQueryTool>();
 builder.Services.AddSingleton<ICustomMcpTool, ListCommentsTool>();
 builder.Services.AddSingleton<ICustomMcpTool, GetCommentTool>();
 builder.Services.AddSingleton<ICustomMcpTool, AddCommentTool>();
+builder.Services.AddSingleton<ICustomMcpTool, UpdateCommentTool>();
 builder.Services.AddSingleton<ICustomMcpTool, ApprovalsListTool>();
 builder.Services.AddSingleton<ICustomMcpTool, ApprovalsGetTool>();
 builder.Services.AddSingleton<ICustomMcpTool, ApprovalsApproveTool>();
