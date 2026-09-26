@@ -818,4 +818,40 @@ public class AdoRestClientTests
 
         await act.Should().ThrowAsync<AdoRestException>();
     }
+
+    // ── UpdatePullRequestDescriptionAsync ────────────────────────────────────
+
+    [Fact]
+    public async Task UpdatePullRequestDescriptionAsync_patches_the_pull_request_url_with_the_description()
+    {
+        var (client, handler) = CreateClient(Json("{}"));
+
+        await client.UpdatePullRequestDescriptionAsync("my org", "my proj", "my repo", 77, "the description");
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Patch);
+        handler.LastRequest.Headers.Authorization!.Scheme.Should().Be("Bearer");
+        handler.LastRequest.Headers.Authorization.Parameter.Should().Be(CallerToken);
+        handler.LastRequest.RequestUri!.AbsoluteUri.Should().Be(
+            "https://dev.azure.com/my%20org/my%20proj/_apis/git/repositories/my%20repo/pullRequests/77?api-version=7.1");
+        handler.LastContentType.Should().Be("application/json");
+
+        using var doc = JsonDocument.Parse(handler.LastBody!);
+        doc.RootElement.GetProperty("description").GetString().Should().Be("the description");
+    }
+
+    [Fact]
+    public async Task UpdatePullRequestDescriptionAsync_throws_with_status_and_message_on_non_success()
+    {
+        var (client, _) = CreateClient(
+            new HttpResponseMessage(HttpStatusCode.NotFound)
+            {
+                Content = new StringContent("{\"message\":\"pull request does not exist\"}"),
+            });
+
+        var act = () => client.UpdatePullRequestDescriptionAsync("org", "proj", "repo", 999, "x");
+
+        var ex = (await act.Should().ThrowAsync<AdoRestException>()).Which;
+        ex.StatusCode.Should().Be(404);
+        ex.Message.Should().Be("pull request does not exist");
+    }
 }

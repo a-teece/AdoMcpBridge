@@ -153,6 +153,15 @@ public interface IAdoRestClient
     Task<AdoRepoItemContent?> GetRepoItemContentAsync(
         string org, string project, string repositoryId, string path,
         string? version, string? versionType, CancellationToken ct = default);
+
+    /// <summary>
+    /// Replaces the description of a pull request via the ADO Git Pull Requests API.
+    /// A non-success status (including a bad pull-request id) is surfaced via
+    /// <see cref="AdoRestException"/> so the caller sees the real reason.
+    /// </summary>
+    Task UpdatePullRequestDescriptionAsync(
+        string org, string project, string repositoryId, int pullRequestId,
+        string description, CancellationToken ct = default);
 }
 
 /// <summary>A single approve/reject instruction for <see cref="IAdoRestClient.UpdateApprovalsAsync"/>.</summary>
@@ -700,6 +709,29 @@ internal sealed class AdoRestClient : IAdoRestClient
         var bytes = await res.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
         var contentType = res.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
         return new AdoRepoItemContent(bytes, contentType);
+    }
+
+    public async Task UpdatePullRequestDescriptionAsync(
+        string org, string project, string repositoryId, int pullRequestId,
+        string description, CancellationToken ct = default)
+    {
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
+                  $"/{Uri.EscapeDataString(project)}/_apis/git/repositories/{Uri.EscapeDataString(repositoryId)}" +
+                  $"/pullRequests/{pullRequestId}?api-version=7.1";
+
+        var payload = JsonSerializer.Serialize(new { description });
+        var body = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        using var req = BuildRequest(HttpMethod.Patch, url, body);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            _logger.LogWarning("ADO PATCH PR {Id} in {Org}/{Project} repo {Repo} returned {Status}: {Body}",
+                pullRequestId, org, project, repositoryId, (int)res.StatusCode, err);
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
+        }
     }
 
     // ADO error bodies carry the human-readable failure (field-validation messages,
