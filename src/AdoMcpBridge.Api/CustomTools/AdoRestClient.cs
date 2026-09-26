@@ -26,6 +26,18 @@ public interface IAdoRestClient
         string value, string? fieldFormat = null, CancellationToken ct = default);
 
     /// <summary>
+    /// Creates a work item of <paramref name="workItemType"/> (e.g. <c>"Bug"</c>) by
+    /// posting a JSON-Patch document of <c>add</c> operations — field values and, for
+    /// long-text fields written as Markdown, <c>/multilineFieldsFormat</c> declarations.
+    /// A non-success status (a bad type, a missing required field, …) is surfaced via
+    /// <see cref="AdoRestException"/> carrying ADO's real message. Returns the created
+    /// work item so the caller can read its <c>id</c>.
+    /// </summary>
+    Task<JsonElement> CreateWorkItemAsync(
+        string org, string project, string workItemType,
+        IReadOnlyList<object> patchOps, CancellationToken ct = default);
+
+    /// <summary>
     /// Returns all fields for a single work item (expanded), or
     /// <see langword="null"/> if the item does not exist.
     /// The returned <see cref="JsonElement"/> is independent of any
@@ -263,6 +275,37 @@ internal sealed class AdoRestClient : IAdoRestClient
                 workItemId, fieldRefName, (int)res.StatusCode, err);
             throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
         }
+    }
+
+    public async Task<JsonElement> CreateWorkItemAsync(
+        string org, string project, string workItemType,
+        IReadOnlyList<object> patchOps, CancellationToken ct = default)
+    {
+        // The work-item type segment is prefixed with a literal '$' that ADO requires
+        // (e.g. /workitems/$Bug); the type value itself is still Uri-escaped after it.
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
+                  $"/{Uri.EscapeDataString(project)}/_apis/wit/workitems" +
+                  $"/${Uri.EscapeDataString(workItemType)}?api-version=7.1";
+
+        var patch = JsonSerializer.Serialize(patchOps);
+
+        using var req = BuildRequest(
+            HttpMethod.Post, url,
+            body: new StringContent(patch, Encoding.UTF8, "application/json-patch+json"));
+
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            _logger.LogWarning("ADO POST work item {Type} in {Org}/{Project} returned {Status}: {Body}",
+                workItemType, org, project, (int)res.StatusCode, err);
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
+        }
+
+        var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.Clone();
     }
 
     public async Task<JsonElement?> GetWorkItemAsync(

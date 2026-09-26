@@ -854,4 +854,79 @@ public class AdoRestClientTests
         ex.StatusCode.Should().Be(404);
         ex.Message.Should().Be("pull request does not exist");
     }
+
+    // ── CreateWorkItemAsync ──────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CreateWorkItemAsync_posts_json_patch_to_the_dollar_prefixed_type_url()
+    {
+        var (client, handler) = CreateClient(Json("{\"id\":123}", HttpStatusCode.OK));
+
+        await client.CreateWorkItemAsync(
+            "org", "proj", "Bug",
+            [new { op = "add", path = "/fields/System.Title", value = "T" }]);
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Post);
+        handler.LastRequest.Headers.Authorization!.Scheme.Should().Be("Bearer");
+        handler.LastRequest.Headers.Authorization.Parameter.Should().Be(CallerToken);
+        handler.LastRequest.RequestUri!.AbsoluteUri.Should().Be(
+            "https://dev.azure.com/org/proj/_apis/wit/workitems/$Bug?api-version=7.1");
+        handler.LastContentType.Should().Be("application/json-patch+json");
+    }
+
+    [Fact]
+    public async Task CreateWorkItemAsync_escapes_org_project_and_type_but_keeps_the_literal_dollar()
+    {
+        var (client, handler) = CreateClient(Json("{\"id\":1}"));
+
+        await client.CreateWorkItemAsync("my org", "my proj", "User Story", []);
+
+        handler.LastRequest!.RequestUri!.AbsoluteUri.Should().Be(
+            "https://dev.azure.com/my%20org/my%20proj/_apis/wit/workitems/$User%20Story?api-version=7.1");
+    }
+
+    [Fact]
+    public async Task CreateWorkItemAsync_serializes_the_patch_ops_as_the_body()
+    {
+        var (client, handler) = CreateClient(Json("{\"id\":1}"));
+
+        await client.CreateWorkItemAsync(
+            "org", "proj", "Task",
+            [
+                new { op = "add", path = "/fields/System.Title", value = "hello" },
+                new { op = "add", path = "/multilineFieldsFormat/System.Description", value = "Markdown" },
+            ]);
+
+        var root = JsonDocument.Parse(handler.LastBody!).RootElement;
+        root.ValueKind.Should().Be(JsonValueKind.Array);
+        root.GetArrayLength().Should().Be(2);
+        root[0].GetProperty("op").GetString().Should().Be("add");
+        root[0].GetProperty("path").GetString().Should().Be("/fields/System.Title");
+        root[0].GetProperty("value").GetString().Should().Be("hello");
+        root[1].GetProperty("path").GetString().Should().Be("/multilineFieldsFormat/System.Description");
+    }
+
+    [Fact]
+    public async Task CreateWorkItemAsync_returns_the_created_work_item_element()
+    {
+        var (client, _) = CreateClient(Json("{\"id\":456,\"fields\":{\"System.Title\":\"T\"}}"));
+
+        var created = await client.CreateWorkItemAsync("org", "proj", "Bug", []);
+
+        created.GetProperty("id").GetInt32().Should().Be(456);
+        created.GetProperty("fields").GetProperty("System.Title").GetString().Should().Be("T");
+    }
+
+    [Fact]
+    public async Task CreateWorkItemAsync_throws_with_status_and_message_on_non_success()
+    {
+        var (client, _) = CreateClient(Json(
+            "{\"message\":\"The field 'System.Title' is required.\"}", HttpStatusCode.BadRequest));
+
+        var act = () => client.CreateWorkItemAsync("org", "proj", "Bug", []);
+
+        var ex = (await act.Should().ThrowAsync<AdoRestException>()).Which;
+        ex.StatusCode.Should().Be(400);
+        ex.Message.Should().Be("The field 'System.Title' is required.");
+    }
 }
