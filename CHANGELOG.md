@@ -6,6 +6,22 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.22](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.21...v0.1.22) (2026-09-26)
+
+
+### Features
+
+* add ado_bridge_create_work_item with slot-backed markdown fields ([#88](https://github.com/a-teece/AdoMcpBridge/issues/88)) ([ef651c1](https://github.com/a-teece/AdoMcpBridge/commit/ef651c177cab4858e8d3a2b06a8f2c32eeb89880))
+* add ado_bridge_read_file for inline text file reads ([#86](https://github.com/a-teece/AdoMcpBridge/issues/86)) ([e37d730](https://github.com/a-teece/AdoMcpBridge/commit/e37d730f850d733691f0b2db601cd987567d6edb))
+* add ado_bridge_update_comment to edit existing comments ([#89](https://github.com/a-teece/AdoMcpBridge/issues/89)) ([7dbb46e](https://github.com/a-teece/AdoMcpBridge/commit/7dbb46ef041ea444f82d86edc64fb9581ba6325d))
+* add ado_bridge_write_pr_description_from_slot with length guard ([#87](https://github.com/a-teece/AdoMcpBridge/issues/87)) ([2e1b0f8](https://github.com/a-teece/AdoMcpBridge/commit/2e1b0f83a6fc63f267833a2963451ff6dad6c433))
+* support a configured default organization across all tools ([#85](https://github.com/a-teece/AdoMcpBridge/issues/85)) ([a14331b](https://github.com/a-teece/AdoMcpBridge/commit/a14331bed026916fcce518a0e5ad550fbefb4c59))
+
+
+### Bug Fixes
+
+* surface real ADO errors and validate required args in custom tools ([#83](https://github.com/a-teece/AdoMcpBridge/issues/83)) ([bd24bc3](https://github.com/a-teece/AdoMcpBridge/commit/bd24bc357b6b643256c45212cbe10308df722f98))
+
 ## [0.1.21](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.20...v0.1.21) (2026-09-16)
 
 
