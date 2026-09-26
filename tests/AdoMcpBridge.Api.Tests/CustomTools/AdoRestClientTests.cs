@@ -648,6 +648,96 @@ public class AdoRestClientTests
         await act.Should().ThrowAsync<AdoRestException>();
     }
 
+    // ── GetRepoItemContentAsync ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetRepoItemContentAsync_gets_by_path_with_download_flag_and_returns_bytes()
+    {
+        var bytes = new byte[] { 1, 2, 3, 4 };
+        var (client, handler) = CreateClient(Binary(bytes, "text/plain"));
+
+        var result = await client.GetRepoItemContentAsync(
+            "org", "proj", "my-repo", "/src/Foo.cs", null, null);
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Get);
+        handler.LastRequest.Headers.Authorization!.Scheme.Should().Be("Bearer");
+        handler.LastRequest.Headers.Authorization.Parameter.Should().Be(CallerToken);
+        var url = handler.LastRequest.RequestUri!.ToString();
+        url.Should().Contain("/proj/_apis/git/repositories/my-repo/items")
+            .And.Contain("path=%2Fsrc%2FFoo.cs")
+            .And.Contain("download=true")
+            .And.Contain("api-version=7.1");
+        url.Should().NotContain("versionDescriptor");
+        result.Should().NotBeNull();
+        result!.Content.Should().Equal(bytes);
+        result.ContentType.Should().Be("text/plain");
+    }
+
+    [Fact]
+    public async Task GetRepoItemContentAsync_appends_version_descriptor_with_supplied_type()
+    {
+        var (client, handler) = CreateClient(Binary([9], "text/plain"));
+
+        await client.GetRepoItemContentAsync(
+            "org", "proj", "my-repo", "/README.md", "abc123", "Commit");
+
+        var url = handler.LastRequest!.RequestUri!.ToString();
+        url.Should().Contain("versionDescriptor.version=abc123")
+            .And.Contain("versionDescriptor.versionType=Commit");
+    }
+
+    [Fact]
+    public async Task GetRepoItemContentAsync_defaults_version_type_to_branch_when_version_given_without_type()
+    {
+        var (client, handler) = CreateClient(Binary([9], "text/plain"));
+
+        await client.GetRepoItemContentAsync(
+            "org", "proj", "my-repo", "/README.md", "main", null);
+
+        var url = handler.LastRequest!.RequestUri!.ToString();
+        url.Should().Contain("versionDescriptor.version=main")
+            .And.Contain("versionDescriptor.versionType=Branch");
+    }
+
+    [Fact]
+    public async Task GetRepoItemContentAsync_defaults_content_type_when_absent()
+    {
+        var (client, _) = CreateClient(Binary([9], contentType: null));
+
+        var result = await client.GetRepoItemContentAsync(
+            "org", "proj", "my-repo", "/README.md", null, null);
+
+        result!.ContentType.Should().Be("application/octet-stream");
+    }
+
+    [Fact]
+    public async Task GetRepoItemContentAsync_returns_null_on_404()
+    {
+        var (client, _) = CreateClient(
+            new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("no file") });
+
+        var result = await client.GetRepoItemContentAsync(
+            "org", "proj", "my-repo", "/missing.cs", null, null);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetRepoItemContentAsync_throws_with_status_and_message_on_non_success()
+    {
+        var (client, _) = CreateClient(new HttpResponseMessage(HttpStatusCode.Forbidden)
+        {
+            Content = new StringContent(
+                "{\"message\":\"access denied\"}", Encoding.UTF8, "application/json"),
+        });
+
+        var act = () => client.GetRepoItemContentAsync("org", "proj", "my-repo", "/secret.cs", null, null);
+
+        var ex = (await act.Should().ThrowAsync<AdoRestException>()).Which;
+        ex.StatusCode.Should().Be(403);
+        ex.Message.Should().Be("access denied");
+    }
+
     // ── CreateAttachmentAsync ────────────────────────────────────────────────
 
     [Fact]

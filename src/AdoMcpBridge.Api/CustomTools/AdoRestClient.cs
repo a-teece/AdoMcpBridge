@@ -141,6 +141,18 @@ public interface IAdoRestClient
     Task<JsonElement> QueryByWiqlAsync(
         string org, string? project, string? team, string wiql, int? top, bool? timePrecision,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Downloads a single repository item's raw bytes from the ADO Git Items API by its
+    /// <paramref name="path"/>, returning <see langword="null"/> when the file, path, or
+    /// repository does not exist (HTTP 404). When <paramref name="version"/> is supplied a
+    /// version descriptor is appended; <paramref name="versionType"/> defaults to
+    /// <c>Branch</c> when a version is given without one. The returned content type is taken
+    /// from ADO's response header (falling back to <c>application/octet-stream</c>).
+    /// </summary>
+    Task<AdoRepoItemContent?> GetRepoItemContentAsync(
+        string org, string project, string repositoryId, string path,
+        string? version, string? versionType, CancellationToken ct = default);
 }
 
 /// <summary>A single approve/reject instruction for <see cref="IAdoRestClient.UpdateApprovalsAsync"/>.</summary>
@@ -148,6 +160,9 @@ public sealed record ApprovalUpdate(string ApprovalId, string Status, string? Co
 
 /// <summary>Raw bytes of a downloaded attachment plus the MIME type ADO reported for it.</summary>
 public sealed record AdoAttachmentContent(byte[] Content, string ContentType);
+
+/// <summary>Raw bytes of a downloaded repository item plus the MIME type ADO reported for it.</summary>
+public sealed record AdoRepoItemContent(byte[] Content, string ContentType);
 
 /// <summary>Reference (id + url) to an attachment uploaded to the ADO attachment store.</summary>
 public sealed record AdoAttachmentRef(string Id, string Url);
@@ -654,6 +669,37 @@ internal sealed class AdoRestClient : IAdoRestClient
         var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         using var doc = JsonDocument.Parse(json);
         return doc.RootElement.Clone();
+    }
+
+    public async Task<AdoRepoItemContent?> GetRepoItemContentAsync(
+        string org, string project, string repositoryId, string path,
+        string? version, string? versionType, CancellationToken ct = default)
+    {
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}" +
+                  $"/{Uri.EscapeDataString(project)}/_apis/git/repositories/{Uri.EscapeDataString(repositoryId)}/items" +
+                  $"?path={Uri.EscapeDataString(path)}&download=true&api-version=7.1";
+        if (!string.IsNullOrEmpty(version))
+        {
+            url += $"&versionDescriptor.version={Uri.EscapeDataString(version)}" +
+                   $"&versionDescriptor.versionType={Uri.EscapeDataString(versionType ?? "Branch")}";
+        }
+
+        using var req = BuildRequest(HttpMethod.Get, url, body: null);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+
+        if (res.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            _logger.LogWarning("ADO GET repo item {Path} in {Org}/{Project} repo {Repo} returned {Status}: {Body}",
+                path, org, project, repositoryId, (int)res.StatusCode, err);
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
+        }
+
+        var bytes = await res.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+        var contentType = res.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+        return new AdoRepoItemContent(bytes, contentType);
     }
 
     // ADO error bodies carry the human-readable failure (field-validation messages,

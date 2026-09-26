@@ -59,6 +59,7 @@ builder.Services.AddSingleton<IMcpSessionRegistry, McpSessionRegistry>();
 // resolve them all at once via IEnumerable<ICustomMcpTool>.
 builder.Services.AddSingleton<ICustomMcpTool, DownloadFieldTool>();
 builder.Services.AddSingleton<ICustomMcpTool, DownloadAttachmentTool>();
+builder.Services.AddSingleton<ICustomMcpTool, ReadFileTool>();
 builder.Services.AddSingleton<ICustomMcpTool, CreateUploadSlotTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WriteFieldFromSlotTool>();
 builder.Services.AddSingleton<ICustomMcpTool, UploadAttachmentFromSlotTool>();
