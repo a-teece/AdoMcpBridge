@@ -32,6 +32,7 @@ internal static class YarpRegistration
             branch.UseMiddleware<EntraTokenSwapMiddleware>();
             branch.UseMiddleware<CustomToolMiddleware>();
             branch.UseMiddleware<HeaderPassthroughMiddleware>();
+            branch.UseMiddleware<DefaultOrgPathMiddleware>();
             branch.UseRouting();
             branch.UseEndpoints(endpoints => endpoints.MapReverseProxy());
         });
