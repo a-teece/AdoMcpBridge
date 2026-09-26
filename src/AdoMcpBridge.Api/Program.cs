@@ -62,6 +62,7 @@ builder.Services.AddSingleton<ICustomMcpTool, DownloadAttachmentTool>();
 builder.Services.AddSingleton<ICustomMcpTool, ReadFileTool>();
 builder.Services.AddSingleton<ICustomMcpTool, CreateUploadSlotTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WriteFieldFromSlotTool>();
+builder.Services.AddSingleton<ICustomMcpTool, CreateWorkItemTool>();
 builder.Services.AddSingleton<ICustomMcpTool, UploadAttachmentFromSlotTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WritePrDescriptionFromSlotTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WitGetSlimTool>();
