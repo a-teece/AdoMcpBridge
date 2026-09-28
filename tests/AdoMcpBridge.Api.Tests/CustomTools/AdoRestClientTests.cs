@@ -968,4 +968,69 @@ public class AdoRestClientTests
         ex.StatusCode.Should().Be(400);
         ex.Message.Should().Be("The field 'System.Title' is required.");
     }
+
+    // ── ResolveIdentityAsync ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ResolveIdentityAsync_hits_the_vssps_identities_url_with_the_escaped_email()
+    {
+        var (client, handler) = CreateClient(Json(
+            "{\"value\":[{\"id\":\"guid-1\",\"providerDisplayName\":\"Ada Lovelace\"}]}"));
+
+        await client.ResolveIdentityAsync("my org", "ada@example.com");
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Get);
+        handler.LastRequest.RequestUri!.AbsoluteUri.Should()
+            .Be("https://vssps.dev.azure.com/my%20org/_apis/identities" +
+                "?searchFilter=General&filterValue=ada%40example.com&api-version=7.1");
+        handler.LastRequest.Headers.Authorization!.Parameter.Should().Be(CallerToken);
+    }
+
+    [Fact]
+    public async Task ResolveIdentityAsync_returns_id_and_provider_display_name_from_first_match()
+    {
+        var (client, _) = CreateClient(Json(
+            "{\"value\":[{\"id\":\"guid-1\",\"providerDisplayName\":\"Ada Lovelace\"}," +
+            "{\"id\":\"guid-2\",\"providerDisplayName\":\"Someone Else\"}]}"));
+
+        var identity = await client.ResolveIdentityAsync("org", "ada@example.com");
+
+        identity.Should().NotBeNull();
+        identity!.Id.Should().Be("guid-1");
+        identity.DisplayName.Should().Be("Ada Lovelace");
+    }
+
+    [Fact]
+    public async Task ResolveIdentityAsync_falls_back_to_displayName_then_email_when_provider_name_absent()
+    {
+        var (client, _) = CreateClient(Json(
+            "{\"value\":[{\"id\":\"guid-1\",\"displayName\":\"Fallback Name\"}]}"));
+
+        var identity = await client.ResolveIdentityAsync("org", "ada@example.com");
+
+        identity!.DisplayName.Should().Be("Fallback Name");
+    }
+
+    [Fact]
+    public async Task ResolveIdentityAsync_returns_null_when_value_is_empty()
+    {
+        var (client, _) = CreateClient(Json("{\"value\":[]}"));
+
+        var identity = await client.ResolveIdentityAsync("org", "nobody@example.com");
+
+        identity.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ResolveIdentityAsync_throws_on_non_success()
+    {
+        var (client, _) = CreateClient(Json(
+            "{\"message\":\"nope\"}", HttpStatusCode.Unauthorized));
+
+        var act = () => client.ResolveIdentityAsync("org", "ada@example.com");
+
+        var ex = (await act.Should().ThrowAsync<AdoRestException>()).Which;
+        ex.StatusCode.Should().Be(401);
+        ex.Message.Should().Be("nope");
+    }
 }
