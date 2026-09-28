@@ -47,7 +47,7 @@ internal static partial class MentionResolver
 
             return markdown
                 ? $"@<{identity.Id}>"
-                : $"<a href=\"#\" data-vss-mention=\"version:2.0,{identity.Id}\">@{identity.DisplayName}</a>";
+                : $"<a href=\"#\" data-vss-mention=\"version:2.0,{identity.Id}\">@{System.Net.WebUtility.HtmlEncode(identity.DisplayName)}</a>";
         });
     }
 }

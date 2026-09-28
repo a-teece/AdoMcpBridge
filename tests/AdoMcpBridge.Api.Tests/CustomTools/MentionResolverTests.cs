@@ -47,6 +47,19 @@ public class MentionResolverTests
     }
 
     [Fact]
+    public async Task Html_mention_html_encodes_the_display_name()
+    {
+        // A display name with HTML-significant characters must not break (or inject into)
+        // the anchor markup of an HTML-format comment.
+        var fake = new FakeResolver(new() { ["ada@x.com"] = new AdoIdentity("guid-1", "A & B <x> \"y\"") });
+
+        var result = await Resolve("@<ada@x.com>", markdown: false, fake);
+
+        result.Should().Be(
+            "<a href=\"#\" data-vss-mention=\"version:2.0,guid-1\">@A &amp; B &lt;x&gt; &quot;y&quot;</a>");
+    }
+
+    [Fact]
     public async Task Multiple_distinct_mentions_are_each_resolved()
     {
         var fake = new FakeResolver(new()
