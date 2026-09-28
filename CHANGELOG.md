@@ -6,6 +6,13 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.23](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.22...v0.1.23) (2026-09-28)
+
+
+### Features
+
+* resolve @&lt;email&gt; tokens to Azure DevOps mentions in comments ([#90](https://github.com/a-teece/AdoMcpBridge/issues/90)) ([b00e6aa](https://github.com/a-teece/AdoMcpBridge/commit/b00e6aa91b45e51cad5ee16400f6eec87d315a68))
+
 ## [0.1.22](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.21...v0.1.22) (2026-09-26)
 
 
