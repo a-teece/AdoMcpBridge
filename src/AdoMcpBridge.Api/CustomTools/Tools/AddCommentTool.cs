@@ -39,8 +39,10 @@ internal sealed class AddCommentTool : ICustomMcpTool
         "ado_bridge_create_upload_slot and posted by passing 'slotId' + 'sha256' (the bridge verifies " +
         "the SHA-256 and reads the body from the slot), so a large comment never routes through the model. " +
         "Provide exactly one of 'text' or 'slotId'. " +
+        "@<user@domain.com> tokens in the body are resolved to real Azure DevOps @mentions " +
+        "(an unresolvable email is left as written). " +
         "Returns {\"status\":\"ADDED\",\"commentId\":N,\"charCount\":N,\"format\":\"markdown|html\"}. " +
-        "The body is stored verbatim.";
+        "The body is stored verbatim apart from resolved @mentions.";
 
     public object InputSchema => new
     {
@@ -113,6 +115,13 @@ internal sealed class AddCommentTool : ICustomMcpTool
                     IsError: true);
             body = text;
         }
+
+        // Resolve any @<email> mention tokens to real ADO mentions in the chosen format
+        // before posting. No-op when the body carries no such tokens.
+        body = await MentionResolver.ResolveAsync(
+                body, isMarkdown,
+                (email, token) => _ado.ResolveIdentityAsync(org, email, token), ct)
+            .ConfigureAwait(false);
 
         JsonElement created;
         try

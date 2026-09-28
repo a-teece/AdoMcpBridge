@@ -306,4 +306,36 @@ public class UpdateCommentToolTests
         result.IsError.Should().BeTrue();
         result.Text.Should().Contain("ADO request failed (transport)");
     }
+
+    // ── @mention resolution ─────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Resolves_email_mention_token_before_updating()
+    {
+        StubUpdatedComment(7);
+        _ado.ResolveIdentityAsync("org", "ada@x.com", Arg.Any<CancellationToken>())
+            .Returns(new AdoIdentity("guid-1", "Ada"));
+
+        var result = await CreateTool().InvokeAsync(
+            Args(new() { ["text"] = "ping @<ada@x.com>", ["format"] = "markdown" }), default);
+
+        result.IsError.Should().BeFalse();
+        await _ado.Received(1).UpdateWorkItemCommentAsync(
+            "org", "proj", 42, 7, "ping @<guid-1>", true, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Passes_body_without_mention_tokens_through_unchanged_and_does_not_resolve()
+    {
+        StubUpdatedComment(7);
+
+        var result = await CreateTool().InvokeAsync(
+            Args(new() { ["text"] = "no mentions here" }), default);
+
+        result.IsError.Should().BeFalse();
+        await _ado.Received(1).UpdateWorkItemCommentAsync(
+            "org", "proj", 42, 7, "no mentions here", true, Arg.Any<CancellationToken>());
+        await _ado.DidNotReceive().ResolveIdentityAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
 }

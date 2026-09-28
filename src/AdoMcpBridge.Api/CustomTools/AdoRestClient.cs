@@ -185,7 +185,20 @@ public interface IAdoRestClient
     Task UpdatePullRequestDescriptionAsync(
         string org, string project, string repositoryId, int pullRequestId,
         string description, CancellationToken ct = default);
+
+    /// <summary>
+    /// Resolves an ADO identity by email via the Identities API on the <c>vssps</c> host
+    /// (a different host from the other calls here). Returns the first match's identity id
+    /// (the GUID used to build an @mention) and display name, or <see langword="null"/> when
+    /// no identity matches the email (an HTTP 200 with an empty <c>value[]</c> — not an error,
+    /// so an unresolvable mention can be left as written). A non-success status is surfaced
+    /// via <see cref="AdoRestException"/>.
+    /// </summary>
+    Task<AdoIdentity?> ResolveIdentityAsync(string org, string email, CancellationToken ct = default);
 }
+
+/// <summary>An ADO identity resolved by email: its <c>id</c> (GUID) and a display name.</summary>
+public sealed record AdoIdentity(string Id, string DisplayName);
 
 /// <summary>A single approve/reject instruction for <see cref="IAdoRestClient.UpdateApprovalsAsync"/>.</summary>
 public sealed record ApprovalUpdate(string ApprovalId, string Status, string? Comment);
@@ -816,6 +829,50 @@ internal sealed class AdoRestClient : IAdoRestClient
                 pullRequestId, org, project, repositoryId, (int)res.StatusCode, err);
             throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
         }
+    }
+
+    public async Task<AdoIdentity?> ResolveIdentityAsync(
+        string org, string email, CancellationToken ct = default)
+    {
+        // The Identities API lives on the vssps host, not dev.azure.com like the rest of
+        // this client. filterValue carries the email; searchFilter=General matches it against
+        // the identity's general searchable fields.
+        var url = $"https://vssps.dev.azure.com/{Uri.EscapeDataString(org)}/_apis/identities" +
+                  $"?searchFilter=General&filterValue={Uri.EscapeDataString(email)}&api-version=7.1";
+
+        using var req = BuildRequest(HttpMethod.Get, url, body: null);
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            _logger.LogWarning("ADO resolve identity in {Org} returned {Status}: {Body}",
+                org, (int)res.StatusCode, err);
+            throw new AdoRestException((int)res.StatusCode, ExtractErrorMessage(err, res.StatusCode));
+        }
+
+        var json = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+
+        // A 200 with an empty value[] is the "no such identity" case — not an error.
+        if (!doc.RootElement.TryGetProperty("value", out var values) ||
+            values.ValueKind != JsonValueKind.Array ||
+            values.GetArrayLength() == 0)
+        {
+            return null;
+        }
+
+        var first = values[0];
+        var id = first.TryGetProperty("id", out var idEl) ? idEl.GetString() ?? string.Empty : string.Empty;
+
+        string? displayName = null;
+        if (first.TryGetProperty("providerDisplayName", out var pdnEl) && pdnEl.ValueKind == JsonValueKind.String)
+            displayName = pdnEl.GetString();
+        if (string.IsNullOrEmpty(displayName) &&
+            first.TryGetProperty("displayName", out var dnEl) && dnEl.ValueKind == JsonValueKind.String)
+            displayName = dnEl.GetString();
+
+        return new AdoIdentity(id, string.IsNullOrEmpty(displayName) ? email : displayName);
     }
 
     // ADO error bodies carry the human-readable failure (field-validation messages,
