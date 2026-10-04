@@ -6,6 +6,13 @@ and the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 `release-please` maintains entries below this line from Conventional
 Commit messages — do not hand-edit released sections.
 
+## [0.1.24](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.23...v0.1.24) (2026-10-04)
+
+
+### Features
+
+* add ado_bridge_download_field_as_file tool ([#92](https://github.com/a-teece/AdoMcpBridge/issues/92)) ([2a2ed52](https://github.com/a-teece/AdoMcpBridge/commit/2a2ed52df798f152547efaad4016b4eadabfa229))
+
 ## [0.1.23](https://github.com/a-teece/AdoMcpBridge/compare/v0.1.22...v0.1.23) (2026-09-28)
 
 
