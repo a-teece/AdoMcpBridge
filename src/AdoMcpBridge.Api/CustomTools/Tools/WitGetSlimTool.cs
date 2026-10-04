@@ -122,7 +122,8 @@ internal sealed class WitGetSlimTool : ICustomMcpTool
                 writer.WritePropertyName(field.Name);
                 writer.WriteStartObject();
                 writer.WriteNumber("charCount", value.Length);
-                writer.WriteString("note", "Field contains long text. Use ado_bridge_download_field to read it.");
+                writer.WriteString("note", "Field contains long text. Use ado_bridge_download_field to read it inline, " +
+                    "or ado_bridge_download_field_as_file to save it to a file without loading it into context.");
                 writer.WriteEndObject();
             }
             else
