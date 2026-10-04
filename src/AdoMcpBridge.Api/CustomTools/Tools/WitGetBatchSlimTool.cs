@@ -26,7 +26,8 @@ internal sealed class WitGetBatchSlimTool : ICustomMcpTool
         "Read operations: Gets multiple Azure DevOps work items (up to 200) with all long-text fields " +
         "replaced by compact stub markers showing only the character count. Returns a JSON array of slim " +
         "work-item objects in the same order as the requested ids. " +
-        "Use ado_bridge_download_field to fetch the full content of any stubbed field.";
+        "Use ado_bridge_download_field to fetch the full content of any stubbed field " +
+        "(or ado_bridge_download_field_as_file to get it as a downloadable file without loading it into context).";
 
     public object InputSchema => new
     {

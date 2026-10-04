@@ -18,7 +18,11 @@ internal sealed class DownloadFieldTool : ICustomMcpTool
     public string Description =>
         "Read operations: Downloads a large Azure DevOps work-item long-text field " +
         "(e.g. System.Description or Custom.ImplementationPlan) and returns its content as plain markdown. " +
-        "ADO entity-encoding is reversed automatically; the caller receives the original markdown.";
+        "ADO entity-encoding is reversed automatically; the caller receives the original markdown. " +
+        "NOTE: the full field content is returned inline in this tool result, so it is loaded into the " +
+        "model's context (large fields can consume a lot of it) and is not saved to disk. For large " +
+        "fields, or to grep/search the content, use ado_bridge_download_field_as_file instead: it " +
+        "returns a download URL and keeps the content out of the model's context.";
 
     public object InputSchema => new
     {

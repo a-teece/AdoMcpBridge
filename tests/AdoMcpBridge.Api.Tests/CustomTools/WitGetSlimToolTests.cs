@@ -28,7 +28,8 @@ public class WitGetSlimToolTests
         var doc = JsonDocument.Parse(json).RootElement;
         var desc = doc.GetProperty("fields").GetProperty("System.Description");
         desc.GetProperty("charCount").GetInt32().Should().Be("<p>Hello</p>".Length);
-        desc.GetProperty("note").GetString().Should().Contain("ado_bridge_download_field");
+        desc.GetProperty("note").GetString().Should()
+            .Contain("ado_bridge_download_field").And.Contain("ado_bridge_download_field_as_file");
     }
 
     [Fact]
