@@ -386,7 +386,8 @@ az containerapp revision restart -n ca-adomcp-prod -g rg-adomcp-prod `
 
 The native custom tools (`ado_bridge_wit_get`,
 `ado_bridge_wit_get_batch`, `ado_bridge_wiql_query`,
-`ado_bridge_download_field`, `ado_bridge_download_attachment`,
+`ado_bridge_download_field`, `ado_bridge_download_field_as_file`,
+`ado_bridge_download_attachment`,
 `ado_bridge_create_upload_slot`, `ado_bridge_write_field_from_slot`,
 `ado_bridge_upload_attachment_from_slot`,
 `ado_bridge_list_comments`, `ado_bridge_get_comment`,
@@ -401,9 +402,13 @@ same as if they'd called the REST API directly.
 
 > **What permissions does the signed-in user need?**
 > - `ado_bridge_wit_get` / `ado_bridge_wit_get_batch` /
->   `ado_bridge_download_field` — `GET /_apis/wit/workitems/{id}?fields=...`
->   requires "View work items in this node" (read-only) in the relevant
->   project/area.
+>   `ado_bridge_download_field` / `ado_bridge_download_field_as_file` —
+>   `GET /_apis/wit/workitems/{id}?fields=...` requires "View work items in
+>   this node" (read-only) in the relevant project/area.
+>   `ado_bridge_download_field` returns the markdown inline (it enters the
+>   model's context); `ado_bridge_download_field_as_file` stages it in a blob
+>   and returns a short-lived read-only download URL instead, so the content
+>   can be saved and grepped without passing through the model.
 > - `ado_bridge_download_attachment` — `GET /_apis/wit/attachments/{id}`
 >   requires "View work items in this node" (read-only). Replaces upstream's
 >   `wit_work_item_attachment` (which returns the file as base64 inline and
