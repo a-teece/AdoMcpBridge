@@ -9,7 +9,7 @@ namespace AdoMcpBridge.Api.Tests.CustomTools;
 
 public sealed class DownloadFieldToolTests
 {
-    private DownloadFieldTool CreateTool() =>
+    private static DownloadFieldTool CreateTool() =>
         new(Substitute.For<IAdoRestClient>(), NullLogger<DownloadFieldTool>.Instance);
 
     [Fact]
