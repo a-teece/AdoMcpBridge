@@ -469,12 +469,16 @@ same as if they'd called the REST API directly.
 >   `/rev` so ADO rejects the patch if the item changed since the read.
 > - `ado_bridge_wit_history` — `GET /_apis/wit/workItems/{id}/updates`
 >   requires "View work items in this node" (read-only). Returns the item's
->   updates newest first (rev, revisedBy, revisedDate, field changes as
->   field/old/new, and ADO's `relations` added/removed for link changes);
->   `top` defaults to 20 and is capped at 100, `skip` counts from the newest
->   update. Azure DevOps only returns updates oldest first (200 per page), so
->   the bridge reads every page before ordering. Any old/new text over 4096
->   characters is replaced by `{"stubbed":true,"length":N}`.
+>   updates newest first (rev, revisedBy, revisedDate, changedDate, field
+>   changes as field/old/new, and ADO's `relations` added/removed for link
+>   changes). `changedDate` is when the change was made (absent on link-only
+>   updates); `revisedDate` is when that revision was superseded, so the
+>   newest entry may carry a far-future sentinel date. `top` defaults to 20
+>   and is capped at 100, `skip` counts from the newest update. Azure DevOps
+>   only returns updates oldest first (200 per page), so the bridge reads
+>   every page before ordering, up to 10,000 updates; a longer history is
+>   refused with an error rather than returned partially. Any old/new text
+>   over 4096 characters is replaced by `{"stubbed":true,"length":N}`.
 > - `ado_bridge_create_upload_slot` / `ado_bridge_write_field_from_slot` —
 >   `PATCH /_apis/wit/workitems/{id}` requires "Edit work items in this
 >   node".

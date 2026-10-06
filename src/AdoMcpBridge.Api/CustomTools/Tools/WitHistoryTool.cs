@@ -15,6 +15,11 @@ internal sealed class WitHistoryTool : ICustomMcpTool
     // ADO rejects $top above 200 on the updates endpoint with HTTP 400 (verified live 2026-10-06).
     internal const int AdoPageSize = 200;
 
+    // Hard ceiling on the history read: 50 pages of 200 = 10,000 updates (link-only updates
+    // count). Longer histories are refused rather than truncated.
+    internal const int MaxAdoPages = 50;
+    internal const int MaxUpdates = MaxAdoPages * AdoPageSize;
+
     private readonly IAdoRestClient _ado;
     private readonly ILogger<WitHistoryTool> _logger;
 
@@ -29,11 +34,14 @@ internal sealed class WitHistoryTool : ICustomMcpTool
 
     public string Description =>
         "Read operations: Returns a work item's change history, newest first: one entry per update " +
-        "with rev, revisedBy, revisedDate and the field changes (field, old, new), plus ADO's " +
-        "'relations' (added/removed links) when the update changed links. Any old/new text over " +
+        "with rev, revisedBy, revisedDate, changedDate and the field changes (field, old, new), plus ADO's " +
+        "'relations' (added/removed links) when the update changed links. changedDate is when the change " +
+        "was made (absent on link-only updates); revisedDate is when that revision was superseded, so the " +
+        "newest entry may carry a far-future sentinel date. Any old/new text over " +
         $"{WorkItemSlimProjector.OversizeFieldCharCeiling} characters is replaced by " +
         "{\"stubbed\":true,\"length\":N} — read the current value with ado_bridge_download_field. " +
-        "Page with top/skip (skip counts from the newest update).";
+        $"Page with top/skip (skip counts from the newest update). Items with more than {MaxUpdates} " +
+        "updates are refused with an error rather than returned partially.";
 
     public object InputSchema => new
     {
@@ -78,20 +86,26 @@ internal sealed class WitHistoryTool : ICustomMcpTool
             org, project, id, top, skip);
 
         // ADO returns updates oldest first with no way to reverse the order, so read every
-        // page; newest-first paging is then applied here.
+        // page (at most MaxAdoPages); newest-first paging is then applied here.
         var updates = new List<JsonElement>();
+        var complete = false;
         try
         {
-            while (true)
+            // A short (or empty) page ends the history. Pages are addressed by index, not by
+            // rows received, and the page count is capped, so a misbehaving response (e.g. ADO
+            // ignoring $skip and repeating a full page) cannot loop forever.
+            for (var pageIndex = 0; pageIndex < MaxAdoPages && !complete; pageIndex++)
             {
-                var page = await _ado.GetWorkItemUpdatesAsync(org, project, id, AdoPageSize, updates.Count, ct)
+                var rows = await ReadPageAsync(org, project, id, AdoPageSize, pageIndex * AdoPageSize, ct)
                     .ConfigureAwait(false);
-                var before = updates.Count;
-                if (page.TryGetProperty("value", out var value))
-                    updates.AddRange(value.EnumerateArray());
-                if (updates.Count - before < AdoPageSize)
-                    break;
+                updates.AddRange(rows);
+                complete = rows.Count < AdoPageSize;
             }
+
+            // Every page was full: a one-row probe past the ceiling distinguishes a history of
+            // exactly MaxUpdates from a longer one.
+            if (!complete)
+                complete = (await ReadPageAsync(org, project, id, 1, MaxUpdates, ct).ConfigureAwait(false)).Count == 0;
         }
         catch (AdoRestException ex)
         {
@@ -103,8 +117,21 @@ internal sealed class WitHistoryTool : ICustomMcpTool
             return new McpToolResult($"ADO request failed (transport): {ex.Message}", IsError: true);
         }
 
+        // Never return a partial list: it would hold the OLDEST updates, not the newest.
+        if (!complete)
+            return new McpToolResult(
+                $"Work item {id} has more than {MaxUpdates} updates, the most this tool reads; its history " +
+                "cannot be ordered newest-first, so no (partial) history was returned.", IsError: true);
+
         updates.Reverse();
         return new McpToolResult(BuildSlimJson(updates.Skip(skip).Take(top)));
+    }
+
+    private async Task<List<JsonElement>> ReadPageAsync(
+        string org, string project, int id, int top, int skip, CancellationToken ct)
+    {
+        var page = await _ado.GetWorkItemUpdatesAsync(org, project, id, top, skip, ct).ConfigureAwait(false);
+        return page.TryGetProperty("value", out var value) ? value.EnumerateArray().ToList() : [];
     }
 
     internal static string BuildSlimJson(IEnumerable<JsonElement> updates)
@@ -136,9 +163,19 @@ internal sealed class WitHistoryTool : ICustomMcpTool
         else
             writer.WriteNull("revisedDate");
 
+        // revisedDate is when the revision was superseded; System.ChangedDate's new value is
+        // when this change was made. Link-only updates carry no fields, so omit it there.
+        var hasFields = update.TryGetProperty("fields", out var fields);
+        if (hasFields && fields.TryGetProperty("System.ChangedDate", out var changed) &&
+            changed.TryGetProperty("newValue", out var changedDate))
+        {
+            writer.WritePropertyName("changedDate");
+            changedDate.WriteTo(writer);
+        }
+
         writer.WritePropertyName("changes");
         writer.WriteStartArray();
-        if (update.TryGetProperty("fields", out var fields))
+        if (hasFields)
         {
             foreach (var field in fields.EnumerateObject())
             {

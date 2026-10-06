@@ -154,6 +154,35 @@ public class WitHistoryToolTests
         root[0].GetProperty("changes").GetArrayLength().Should().Be(0);
     }
 
+    [Fact]
+    public async Task History_ChangedDate_ComesFromSystemChangedDateNewValue_RevisedDateUntouched()
+    {
+        // Live: on the current revision ADO's revisedDate is a far-future sentinel.
+        ReturnsPage(0,
+            "{\"count\":1,\"value\":[{\"id\":7,\"rev\":7,\"revisedDate\":\"9999-01-01T00:00:00Z\"," +
+            "\"fields\":{\"System.ChangedDate\":{\"oldValue\":\"2026-01-01T09:00:00Z\"," +
+            "\"newValue\":\"2026-02-03T04:05:06.07Z\"}}}]}");
+
+        var root = await InvokeOk(new { organization = "org", project = "proj", id = 42 });
+
+        root[0].GetProperty("revisedDate").GetString().Should().Be("9999-01-01T00:00:00Z");
+        root[0].GetProperty("changedDate").GetString().Should().Be("2026-02-03T04:05:06.07Z");
+    }
+
+    [Theory]
+    [InlineData(null)]                                                            // link-only update
+    [InlineData("{\"System.State\":{\"newValue\":\"New\"}}")]                     // no ChangedDate
+    [InlineData("{\"System.ChangedDate\":{\"oldValue\":\"2026-01-01T09:00:00Z\"}}")] // no newValue
+    public async Task History_ChangedDate_OmittedWhenAbsent(string? fields)
+    {
+        ReturnsPage(0, Page([Update(1, 1, fields)]));
+
+        var root = await InvokeOk(new { organization = "org", project = "proj", id = 42 });
+
+        root[0].TryGetProperty("changedDate", out _).Should().BeFalse();
+        root[0].GetProperty("revisedDate").GetString().Should().Be("2026-01-02T10:00:00Z");
+    }
+
     [Theory]
     [InlineData("null")]
     [InlineData("{\"id\":\"00000000-0000-0000-0000-000000000001\"}")]
@@ -313,6 +342,55 @@ public class WitHistoryToolTests
         Revs(root).Should().Equal(230, 229);
         await _ado.Received(2).GetWorkItemUpdatesAsync(
             "org", "proj", 42, WitHistoryTool.AdoPageSize, Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task History_ExactlyOneFullPageThenEmptyPage_Terminates()
+    {
+        ReturnsPage(0, Simple(1, 200));
+        ReturnsPage(200, "{\"count\":0,\"value\":[]}");
+
+        var root = await InvokeOk(new { organization = "org", project = "proj", id = 42, top = 1 });
+
+        Revs(root).Should().Equal(200);
+        await _ado.Received(2).GetWorkItemUpdatesAsync(
+            "org", "proj", 42, Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task History_ExactlyMaxUpdates_ThenEmptyProbe_ReturnsNewestFirst()
+    {
+        // Boundary: 50 full pages (10,000 updates) are allowed; a one-row probe past the
+        // ceiling confirms nothing more exists.
+        for (var page = 0; page < WitHistoryTool.MaxAdoPages; page++)
+            ReturnsPage(page * 200, Simple(page * 200 + 1, page * 200 + 200));
+        _ado.GetWorkItemUpdatesAsync("org", "proj", 42, 1, WitHistoryTool.MaxUpdates, Arg.Any<CancellationToken>())
+            .Returns(Parse("{\"count\":0,\"value\":[]}"));
+
+        var root = await InvokeOk(new { organization = "org", project = "proj", id = 42, top = 2 });
+
+        WitHistoryTool.MaxUpdates.Should().Be(10_000);
+        Revs(root).Should().Equal(10_000, 9_999);
+        await _ado.Received(WitHistoryTool.MaxAdoPages + 1).GetWorkItemUpdatesAsync(
+            "org", "proj", 42, Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task History_CeilingHit_ReturnsIsError_WithNoPartialList()
+    {
+        // Every page full — which is also what ADO ignoring $skip would look like — must stop at
+        // the ceiling (50 pages + 1 probe) and refuse, never return the oldest 10,000.
+        _ado.GetWorkItemUpdatesAsync(default!, default!, default, default, default, default)
+            .ReturnsForAnyArgs(Parse(Simple(1, 200)));
+
+        var result = await CreateTool().InvokeAsync(
+            Args(new { organization = "org", project = "proj", id = 42 }), default);
+
+        result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("more than 10000 updates").And.Contain("no (partial) history")
+            .And.NotContain("\"rev\"");
+        await _ado.Received(WitHistoryTool.MaxAdoPages + 1).GetWorkItemUpdatesAsync(
+            "org", "proj", 42, Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
