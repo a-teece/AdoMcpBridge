@@ -275,6 +275,23 @@ public class WitUpdateToolTests
         await NoWrite();
     }
 
+    [Theory]
+    [InlineData("System.History", "set")]
+    [InlineData("System.History", "clear")]
+    [InlineData(" system.history ", "set")]
+    public async Task Update_SystemHistory_IsRejectedWithAddCommentSteering_AndNothingWritten(string name, string op)
+    {
+        var act = () => Invoke(new object[]
+        {
+            new { name = "System.State", value = "Active" },
+            new { name, value = "a comment", op },
+        });
+
+        (await act.Should().ThrowAsync<CallerArgumentException>())
+            .Which.Message.Should().Contain("ado_bridge_add_comment");
+        await NoWrite();
+    }
+
     // ── result shape ─────────────────────────────────────────────────────────
 
     [Fact]
@@ -330,6 +347,48 @@ public class WitUpdateToolTests
 
         result.IsError.Should().BeTrue();
         result.Text.Should().Contain("connection reset");
+    }
+
+    [Fact]
+    public async Task Update_Timeout_ReturnsIsError_SayingWriteMayHaveBeenApplied()
+    {
+        // HttpClient's own timeout surfaces as TaskCanceledException with the caller's token
+        // NOT cancelled.
+        _ado.UpdateWorkItemAsync(default!, default!, default, default!, default)
+            .ThrowsAsyncForAnyArgs(new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout"));
+
+        var result = await Invoke(new[] { new { name = "System.State", value = "Active" } });
+
+        result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("timed out").And.Contain("MAY have been applied")
+            .And.Contain("re-read").And.Contain("before retrying");
+    }
+
+    [Fact]
+    public async Task Update_NonJsonSuccessBody_ReturnsIsError_SayingWriteMayHaveBeenApplied()
+    {
+        _ado.UpdateWorkItemAsync(default!, default!, default, default!, default)
+            .ThrowsAsyncForAnyArgs(new JsonException("'<' is an invalid start of a value."));
+
+        var result = await Invoke(new[] { new { name = "System.State", value = "Active" } });
+
+        result.IsError.Should().BeTrue();
+        result.Text.Should().Contain("MAY have been applied").And.Contain("re-read");
+    }
+
+    [Fact]
+    public async Task Update_RealCallerCancellation_Propagates()
+    {
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+        _ado.UpdateWorkItemAsync(default!, default!, default, default!, default)
+            .ThrowsAsyncForAnyArgs(new OperationCanceledException(cts.Token));
+
+        var act = () => CreateTool().InvokeAsync(
+            Args(new { organization = "org", project = "proj", id = 42, fields = new[] { new { name = "System.Title", value = "t" } } }),
+            cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
     private Task NoWrite()

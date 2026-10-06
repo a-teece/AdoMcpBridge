@@ -7,6 +7,9 @@ internal sealed class WitUpdateBatchTool : ICustomMcpTool
 {
     private const int MaxUpdates = 50;
 
+    private const string NotAttempted =
+        "Not attempted: the request was cancelled before this item was sent. Nothing was written to it.";
+
     private static readonly JsonSerializerOptions OmitNulls =
         new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
 
@@ -71,9 +74,18 @@ internal sealed class WitUpdateBatchTool : ICustomMcpTool
             "ado_bridge_wit_update_batch: updating {Count} work items in {Org}/{Project}",
             planned.Count, org, project);
 
+        // Every outcome is recorded per item so the caller always learns which writes were
+        // applied — an exception escaping mid-batch would hide the items already written and
+        // invite a retry that re-sends them.
         var results = new List<ItemResult>(planned.Count);
         foreach (var update in planned)
         {
+            if (ct.IsCancellationRequested)
+            {
+                results.Add(new ItemResult(update.Id, "FAILED", Error: NotAttempted));
+                continue;
+            }
+
             try
             {
                 var updated = await _ado.UpdateWorkItemAsync(org, project, update.Id, update.Ops, ct)
@@ -89,6 +101,18 @@ internal sealed class WitUpdateBatchTool : ICustomMcpTool
             {
                 results.Add(new ItemResult(update.Id, "FAILED",
                     Error: $"ADO request failed (transport): {ex.Message}"));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                results.Add(new ItemResult(update.Id, "FAILED", Error: WitUpdateTool.CancelledInFlight));
+            }
+            catch (OperationCanceledException)
+            {
+                results.Add(new ItemResult(update.Id, "FAILED", Error: WitUpdateTool.TimedOut));
+            }
+            catch (JsonException)
+            {
+                results.Add(new ItemResult(update.Id, "FAILED", Error: WitUpdateTool.UnreadableResponse));
             }
         }
 

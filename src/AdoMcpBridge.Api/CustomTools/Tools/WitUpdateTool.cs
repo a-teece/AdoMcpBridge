@@ -4,6 +4,20 @@ namespace AdoMcpBridge.Api.CustomTools.Tools;
 
 internal sealed class WitUpdateTool : ICustomMcpTool
 {
+    // Outcomes where the PATCH may or may not have landed: the caller must re-read before
+    // retrying, or a retry could apply the change twice (e.g. on top of a later edit).
+    internal const string TimedOut =
+        "The Azure DevOps request timed out. The write MAY have been applied — re-read the work " +
+        "item (ado_bridge_wit_get) before retrying.";
+
+    internal const string UnreadableResponse =
+        "Azure DevOps accepted the request but returned a response that could not be read as JSON. " +
+        "The write MAY have been applied — re-read the work item (ado_bridge_wit_get) before retrying.";
+
+    internal const string CancelledInFlight =
+        "The request was cancelled while this item was in flight. The write MAY have been applied — " +
+        "re-read the work item (ado_bridge_wit_get) before retrying.";
+
     private readonly IAdoRestClient _ado;
     private readonly ILogger<WitUpdateTool> _logger;
 
@@ -24,6 +38,7 @@ internal sealed class WitUpdateTool : ICustomMcpTool
         string.Join(", ", BasicToolGuardrails.LongTextFieldRefNames) +
         ") are rejected — write them with 'ado_bridge_create_upload_slot' + " +
         "'ado_bridge_write_field_from_slot'. System.Parent is rejected — use 'ado_bridge_wit_link'. " +
+        "System.History (the discussion field) is rejected — use 'ado_bridge_add_comment'. " +
         "Returns {status, id, rev, changedFields}. For several work items use 'ado_bridge_wit_update_batch'.";
 
     public object InputSchema => new
@@ -90,6 +105,14 @@ internal sealed class WitUpdateTool : ICustomMcpTool
         catch (HttpRequestException ex)
         {
             return new McpToolResult($"ADO request failed (transport): {ex.Message}", IsError: true);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return new McpToolResult(TimedOut, IsError: true);
+        }
+        catch (JsonException)
+        {
+            return new McpToolResult(UnreadableResponse, IsError: true);
         }
 
         return new McpToolResult(JsonSerializer.Serialize(new

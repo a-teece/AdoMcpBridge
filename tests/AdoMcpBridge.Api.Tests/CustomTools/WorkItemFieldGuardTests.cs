@@ -45,6 +45,26 @@ public class WorkItemFieldGuardTests
     }
 
     [Theory]
+    [InlineData("System.History")]
+    [InlineData("system.history")]
+    [InlineData("SYSTEM.HISTORY")]
+    [InlineData("  System.History\t")]
+    public void Guard_SystemHistory_Throws_WithAddCommentToolName(string fieldRefName)
+    {
+        var act = () => WorkItemFieldGuard.ThrowIfForbidden(fieldRefName);
+
+        act.Should().Throw<CallerArgumentException>()
+            .Which.Message.Should().Contain("System.History").And.Contain("ado_bridge_add_comment");
+    }
+
+    [Fact]
+    public void Guard_SystemHistory_IsNotAddedToSharedUpstreamLongTextList()
+    {
+        // The upstream wit_work_item_write guardrail reads this list; History must stay out of it.
+        BasicToolGuardrails.LongTextFieldRefNames.Should().NotContain("System.History");
+    }
+
+    [Theory]
     [InlineData("System.Title")]
     [InlineData("System.State")]
     [InlineData("System.Tags")]

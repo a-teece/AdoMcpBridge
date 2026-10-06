@@ -106,6 +106,81 @@ public class WitUpdateBatchToolTests
     }
 
     [Fact]
+    public async Task Batch_TimeoutOnItem_RecordsFailed_KeepsEarlierUpdated_AndContinues()
+    {
+        // HttpClient's own timeout: TaskCanceledException while the caller's token is NOT cancelled.
+        _ado.UpdateWorkItemAsync("org", "proj", 2, Arg.Any<IReadOnlyList<object>>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout"));
+
+        var result = await Invoke(new[] { Update(1), Update(2), Update(3) });
+
+        result.IsError.Should().BeFalse();
+        await _ado.ReceivedWithAnyArgs(3).UpdateWorkItemAsync(default!, default!, default, default!, default);
+        var results = Parse(result.Text).GetProperty("results");
+        results.EnumerateArray().Select(r => r.GetProperty("status").GetString())
+            .Should().Equal("UPDATED", "FAILED", "UPDATED");
+        results[0].GetProperty("rev").GetInt32().Should().Be(101);
+        results[1].GetProperty("id").GetInt32().Should().Be(2);
+        results[1].GetProperty("error").GetString().Should().Contain("timed out").And.Contain("MAY have been applied");
+        results[2].GetProperty("rev").GetInt32().Should().Be(103);
+    }
+
+    [Fact]
+    public async Task Batch_NonJsonResponseOnItem_RecordsFailed_AndContinues()
+    {
+        _ado.UpdateWorkItemAsync("org", "proj", 1, Arg.Any<IReadOnlyList<object>>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new JsonException("'<' is an invalid start of a value."));
+
+        var result = await Invoke(new[] { Update(1), Update(2) });
+
+        await _ado.ReceivedWithAnyArgs(2).UpdateWorkItemAsync(default!, default!, default, default!, default);
+        var results = Parse(result.Text).GetProperty("results");
+        results.EnumerateArray().Select(r => r.GetProperty("status").GetString()).Should().Equal("FAILED", "UPDATED");
+        results[0].GetProperty("error").GetString().Should().Contain("could not be read").And.Contain("MAY have been applied");
+    }
+
+    [Fact]
+    public async Task Batch_RealCancellation_ReturnsPartialResults_WithoutSendingRemainingItems()
+    {
+        using var cts = new CancellationTokenSource();
+        _ado.UpdateWorkItemAsync("org", "proj", 2, Arg.Any<IReadOnlyList<object>>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                cts.Cancel();
+                return Task.FromException<JsonElement>(new OperationCanceledException(cts.Token));
+            });
+
+        var result = await CreateTool().InvokeAsync(
+            Args(new { organization = "org", project = "proj", updates = new[] { Update(1), Update(2), Update(3), Update(4) } }),
+            cts.Token);
+
+        result.IsError.Should().BeFalse();
+        await _ado.ReceivedWithAnyArgs(2).UpdateWorkItemAsync(default!, default!, default, default!, default);
+        var results = Parse(result.Text).GetProperty("results");
+        results.EnumerateArray().Select(r => r.GetProperty("id").GetInt32()).Should().Equal(1, 2, 3, 4);
+        results.EnumerateArray().Select(r => r.GetProperty("status").GetString())
+            .Should().Equal("UPDATED", "FAILED", "FAILED", "FAILED");
+        results[1].GetProperty("error").GetString().Should().Contain("cancelled while this item was in flight")
+            .And.Contain("MAY have been applied");
+        results[2].GetProperty("error").GetString().Should().StartWith("Not attempted");
+        results[3].GetProperty("error").GetString().Should().StartWith("Not attempted");
+    }
+
+    [Fact]
+    public async Task Batch_SystemHistoryInItem_RejectsWithAddCommentSteering()
+    {
+        var act = () => Invoke(new object[]
+        {
+            Update(1),
+            new { id = 2, fields = new[] { new { name = "System.History", value = "a comment" } } },
+        });
+
+        (await act.Should().ThrowAsync<CallerArgumentException>())
+            .Which.Message.Should().Contain("updates[1]").And.Contain("ado_bridge_add_comment");
+        await NoWrite();
+    }
+
+    [Fact]
     public async Task Batch_AllFail_StillReportsEveryItem()
     {
         _ado.UpdateWorkItemAsync(default!, default!, default, default!, default)
