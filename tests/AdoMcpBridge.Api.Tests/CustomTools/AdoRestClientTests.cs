@@ -523,6 +523,85 @@ public class AdoRestClientTests
         ex.Message.Should().Be("TF200016: The following project does not exist: nope.");
     }
 
+    // ── ListQueriesAsync / RunSavedQueryAsync ────────────────────────────────
+
+    [Fact]
+    public async Task ListQueries_BuildsUrlWithDepthAndNoExpand()
+    {
+        var (client, handler) = CreateClient(Json("{\"count\":1,\"value\":[{\"id\":\"q\",\"name\":\"Shared Queries\"}]}"));
+
+        var result = await client.ListQueriesAsync("my org", "my proj", 2);
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Get);
+        handler.LastRequest.RequestUri!.AbsoluteUri.Should().Be(
+            "https://dev.azure.com/my%20org/my%20proj/_apis/wit/queries?%24depth=2&%24expand=none&api-version=7.1");
+        handler.LastRequest.Headers.Authorization!.Scheme.Should().Be("Bearer");
+        handler.LastRequest.Headers.Authorization.Parameter.Should().Be(CallerToken);
+        result.GetProperty("value")[0].GetProperty("name").GetString().Should().Be("Shared Queries");
+    }
+
+    [Fact]
+    public async Task ListQueries_SurfacesAdoMessage_OnFailure()
+    {
+        // Live (2026-10-06): $depth outside 0..2 is a 400 with this message.
+        var (client, _) = CreateClient(Json(
+            "{\"message\":\"A query parameter specified in the request URI is outside the permissible range: " +
+            "Parameter Name: depth, Acceptable Range: 0 to 2\"}",
+            HttpStatusCode.BadRequest));
+
+        var act = () => client.ListQueriesAsync("org", "proj", 3);
+
+        var ex = (await act.Should().ThrowAsync<AdoRestException>()).Which;
+        ex.StatusCode.Should().Be(400);
+        ex.Message.Should().Contain("Acceptable Range: 0 to 2");
+    }
+
+    [Fact]
+    public async Task RunSavedQuery_IncludesTeamSegmentWhenGiven()
+    {
+        var (client, handler) = CreateClient(Json("{\"queryType\":\"flat\",\"workItems\":[{\"id\":5}]}"));
+        var id = Guid.Parse("8c070a12-8457-43f9-96d3-b281e23fabf5");
+
+        var result = await client.RunSavedQueryAsync("org", "my proj", "my team", id, 201);
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Get);
+        handler.LastRequest.RequestUri!.AbsoluteUri.Should().Be(
+            "https://dev.azure.com/org/my%20proj/my%20team/_apis/wit/wiql/8c070a12-8457-43f9-96d3-b281e23fabf5" +
+            "?api-version=7.1&%24top=201");
+        handler.LastRequest.Headers.Authorization!.Parameter.Should().Be(CallerToken);
+        result.GetProperty("workItems")[0].GetProperty("id").GetInt32().Should().Be(5);
+    }
+
+    [Fact]
+    public async Task RunSavedQuery_OmitsTeamAndTop_WhenNull()
+    {
+        var (client, handler) = CreateClient(Json("{\"workItems\":[]}"));
+        var id = Guid.Parse("8c070a12-8457-43f9-96d3-b281e23fabf5");
+
+        await client.RunSavedQueryAsync("org", "proj", null, id, null);
+
+        handler.LastRequest!.RequestUri!.AbsoluteUri.Should().Be(
+            "https://dev.azure.com/org/proj/_apis/wit/wiql/8c070a12-8457-43f9-96d3-b281e23fabf5?api-version=7.1");
+    }
+
+    [Fact]
+    public async Task RunSavedQuery_SurfacesAdoMessage_OnFailure()
+    {
+        // Shape captured live (2026-10-06) for an unknown query id.
+        var (client, _) = CreateClient(Json(
+            "{\"$id\":\"1\",\"innerException\":null,\"message\":\"TF401243: The query " +
+            "00000000-0000-0000-0000-000000000001 does not exist, or you do not have permission to read it.\"," +
+            "\"typeKey\":\"QueryItemNotFoundException\",\"errorCode\":600288,\"eventId\":3200}",
+            HttpStatusCode.NotFound));
+
+        var act = () => client.RunSavedQueryAsync(
+            "org", "proj", null, Guid.Parse("00000000-0000-0000-0000-000000000001"), null);
+
+        var ex = (await act.Should().ThrowAsync<AdoRestException>()).Which;
+        ex.StatusCode.Should().Be(404);
+        ex.Message.Should().StartWith("TF401243: The query 00000000-0000-0000-0000-000000000001 does not exist");
+    }
+
     // ── QueryByWiqlAsync ─────────────────────────────────────────────────────
 
     [Fact]
