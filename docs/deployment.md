@@ -386,6 +386,7 @@ az containerapp revision restart -n ca-adomcp-prod -g rg-adomcp-prod `
 
 The native custom tools (`ado_bridge_wit_get`,
 `ado_bridge_wit_get_batch`, `ado_bridge_wiql_query`,
+`ado_bridge_wit_search`,
 `ado_bridge_download_field`, `ado_bridge_download_field_as_file`,
 `ado_bridge_download_attachment`,
 `ado_bridge_create_upload_slot`, `ado_bridge_write_field_from_slot`,
@@ -420,6 +421,14 @@ same as if they'd called the REST API directly.
 >   requires "View work items in this node" (read-only). Returns work item
 >   IDs only; hydrate fields with `ado_bridge_wit_get_batch`. Pass `team`
 >   (only valid together with `project`) for `@CurrentIteration` macros.
+> - `ado_bridge_wit_search` — `POST
+>   https://almsearch.dev.azure.com/{org}[/{project}]/_apis/search/workitemsearchresults`
+>   runs a full-text work-item search (Azure DevOps Search) with the same
+>   delegated token, and requires "View work items in this node"
+>   (read-only). Returns a
+>   slim list (id, type, title, state, assignedTo, project) plus the total
+>   count; `top` is capped at 100 and `skip` is limited to 0–1000 by the
+>   Search API.
 > - `ado_bridge_create_upload_slot` / `ado_bridge_write_field_from_slot` —
 >   `PATCH /_apis/wit/workitems/{id}` requires "Edit work items in this
 >   node".

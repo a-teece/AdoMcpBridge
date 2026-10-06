@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace AdoMcpBridge.Api.CustomTools;
 
-public interface IAdoRestClient
+public partial interface IAdoRestClient
 {
     /// <summary>
     /// Reads a single work-item field and returns its raw stored value, or
@@ -224,7 +224,7 @@ public sealed class AdoRestException(int statusCode, string message) : Exception
     public int StatusCode { get; } = statusCode;
 }
 
-internal sealed class AdoRestClient : IAdoRestClient
+internal sealed partial class AdoRestClient : IAdoRestClient
 {
     private readonly HttpClient _http;
     private readonly IAdoAccessTokenProvider _tokenProvider;

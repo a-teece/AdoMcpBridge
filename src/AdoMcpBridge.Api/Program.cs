@@ -69,6 +69,7 @@ builder.Services.AddSingleton<ICustomMcpTool, WritePrDescriptionFromSlotTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WitGetSlimTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WitGetBatchSlimTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WiqlQueryTool>();
+builder.Services.AddSingleton<ICustomMcpTool, WitSearchTool>();
 builder.Services.AddSingleton<ICustomMcpTool, ListCommentsTool>();
 builder.Services.AddSingleton<ICustomMcpTool, GetCommentTool>();
 builder.Services.AddSingleton<ICustomMcpTool, AddCommentTool>();
