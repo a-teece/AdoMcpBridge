@@ -462,6 +462,67 @@ public class AdoRestClientTests
         await act.Should().ThrowAsync<AdoRestException>();
     }
 
+    // ── SearchWorkItemsAsync ─────────────────────────────────────────────────
+
+    // Shape captured live from almsearch.dev.azure.com (2026-10-06); values are synthetic.
+    // Note system.id arrives as a string and system.assignedto as "Name <email>".
+    private const string SearchResponse =
+        "{\"count\":1,\"results\":[{\"project\":{\"name\":\"Andrews Weather PoC\",\"id\":\"p-1\"}," +
+        "\"fields\":{\"system.id\":\"101\",\"system.workitemtype\":\"Bug\",\"system.title\":\"Rain gauge\"," +
+        "\"system.assignedto\":\"Jo Bloggs <jo.bloggs@example.com>\",\"system.state\":\"Active\"}," +
+        "\"hits\":[{\"fieldReferenceName\":\"system.title\",\"highlights\":[\"<highlighthit>Rain</highlighthit>\"]}]," +
+        "\"url\":\"https://dev.azure.com/org/_apis/wit/workItems/101\"}],\"infoCode\":0,\"facets\":{}}";
+
+    [Fact]
+    public async Task SearchWorkItems_PostsToAlmsearchHost_WithBearerAndBody()
+    {
+        var (client, handler) = CreateClient(Json(SearchResponse));
+
+        var result = await client.SearchWorkItemsAsync("my org", "my proj", "rain gauge", 25, 50);
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Post);
+        handler.LastRequest.RequestUri!.AbsoluteUri.Should().Be(
+            "https://almsearch.dev.azure.com/my%20org/my%20proj/_apis/search/workitemsearchresults?api-version=7.1");
+        handler.LastRequest.Headers.Authorization!.Scheme.Should().Be("Bearer");
+        handler.LastRequest.Headers.Authorization.Parameter.Should().Be(CallerToken);
+        handler.LastContentType.Should().Be("application/json");
+
+        var body = JsonDocument.Parse(handler.LastBody!).RootElement;
+        body.GetProperty("searchText").GetString().Should().Be("rain gauge");
+        body.GetProperty("$skip").GetInt32().Should().Be(50);
+        body.GetProperty("$top").GetInt32().Should().Be(25);
+        body.GetProperty("includeFacets").GetBoolean().Should().BeFalse();
+
+        result.GetProperty("count").GetInt32().Should().Be(1);
+        result.GetProperty("results")[0].GetProperty("fields")
+            .GetProperty("system.title").GetString().Should().Be("Rain gauge");
+    }
+
+    [Fact]
+    public async Task SearchWorkItems_OmitsProjectSegment_WhenProjectNull()
+    {
+        var (client, handler) = CreateClient(Json("{\"count\":0,\"results\":[]}"));
+
+        await client.SearchWorkItemsAsync("org", null, "x", 1, 0);
+
+        handler.LastRequest!.RequestUri!.AbsoluteUri.Should().Be(
+            "https://almsearch.dev.azure.com/org/_apis/search/workitemsearchresults?api-version=7.1");
+    }
+
+    [Fact]
+    public async Task SearchWorkItems_SurfacesAdoMessage_OnFailure()
+    {
+        var (client, _) = CreateClient(Json(
+            "{\"message\":\"TF200016: The following project does not exist: nope.\"}",
+            HttpStatusCode.NotFound));
+
+        var act = () => client.SearchWorkItemsAsync("org", "nope", "x", 1, 0);
+
+        var ex = (await act.Should().ThrowAsync<AdoRestException>()).Which;
+        ex.StatusCode.Should().Be(404);
+        ex.Message.Should().Be("TF200016: The following project does not exist: nope.");
+    }
+
     // ── QueryByWiqlAsync ─────────────────────────────────────────────────────
 
     [Fact]
