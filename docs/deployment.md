@@ -387,6 +387,7 @@ az containerapp revision restart -n ca-adomcp-prod -g rg-adomcp-prod `
 The native custom tools (`ado_bridge_wit_get`,
 `ado_bridge_wit_get_batch`, `ado_bridge_wiql_query`,
 `ado_bridge_wit_search`, `ado_bridge_wit_list`,
+`ado_bridge_wit_list_queries`, `ado_bridge_wit_run_query`,
 `ado_bridge_download_field`, `ado_bridge_download_field_as_file`,
 `ado_bridge_download_attachment`,
 `ado_bridge_create_upload_slot`, `ado_bridge_write_field_from_slot`,
@@ -436,6 +437,16 @@ same as if they'd called the REST API directly.
 >   in this node" (read-only). Returns slim work items plus `truncated`;
 >   `top` defaults to 50 and is capped at 200, and `orderBy` is limited to a
 >   fixed field whitelist.
+> - `ado_bridge_wit_list_queries` — `GET /_apis/wit/queries?$depth=…&$expand=none`
+>   lists one project's saved queries and folders as a flat list (id, name,
+>   path, isFolder); requires "Read" permission on the query folders
+>   (read-only). `depth` is 1–2 (default 2) — Azure DevOps rejects deeper
+>   expansion.
+> - `ado_bridge_wit_run_query` — `GET [/{team}]/_apis/wit/wiql/{queryId}`
+>   runs a saved query by id and requires "Read" on the query plus "View work
+>   items in this node" (read-only). Returns work item IDs only plus
+>   `truncated`, in the same shape as `ado_bridge_wiql_query`; `top` defaults
+>   to 200 (max 2000). Pass `team` for `@CurrentIteration` queries.
 > - `ado_bridge_create_upload_slot` / `ado_bridge_write_field_from_slot` —
 >   `PATCH /_apis/wit/workitems/{id}` requires "Edit work items in this
 >   node".
