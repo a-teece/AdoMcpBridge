@@ -389,6 +389,7 @@ The native custom tools (`ado_bridge_wit_get`,
 `ado_bridge_wit_search`, `ado_bridge_wit_list`,
 `ado_bridge_wit_list_queries`, `ado_bridge_wit_run_query`,
 `ado_bridge_wit_update`, `ado_bridge_wit_update_batch`,
+`ado_bridge_wit_link`,
 `ado_bridge_download_field`, `ado_bridge_download_field_as_file`,
 `ado_bridge_download_attachment`,
 `ado_bridge_create_upload_slot`, `ado_bridge_write_field_from_slot`,
@@ -458,6 +459,14 @@ same as if they'd called the REST API directly.
 >   of them before writing, then sends one PATCH per item in order — it is not
 >   atomic, and each item's result (`UPDATED` with `rev`, or `FAILED` with
 >   ADO's error) is reported separately.
+> - `ado_bridge_wit_link` — `PATCH /_apis/wit/workitems/{id}` (JSON Patch on
+>   `/relations`) requires "Edit work items in this node"; `remove` first
+>   reads the item (`GET /_apis/wit/workitems/{id}?$expand=All`, "View work
+>   items in this node"). Adds or removes one parent / child / related /
+>   predecessor / successor / duplicate-of / duplicate link — the supported
+>   way to set a parent. `remove` matches the link by relation type and
+>   target id, errors without writing if it is absent, and sends a `test` on
+>   `/rev` so ADO rejects the patch if the item changed since the read.
 > - `ado_bridge_create_upload_slot` / `ado_bridge_write_field_from_slot` —
 >   `PATCH /_apis/wit/workitems/{id}` requires "Edit work items in this
 >   node".
