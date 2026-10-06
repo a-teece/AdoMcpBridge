@@ -31,6 +31,7 @@ public sealed class NativeToolCatalogTests : IClassFixture<BridgeApiFactory>
         names.Should().Contain("ado_bridge_wit_update");
         names.Should().Contain("ado_bridge_wit_update_batch");
         names.Should().Contain("ado_bridge_wit_link");
+        names.Should().Contain("ado_bridge_wit_history");
 
         foreach (var tool in tools)
         {

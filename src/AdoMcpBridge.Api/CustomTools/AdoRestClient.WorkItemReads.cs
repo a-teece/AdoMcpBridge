@@ -23,6 +23,18 @@ public partial interface IAdoRestClient
     /// </summary>
     Task<JsonElement> RunSavedQueryAsync(
         string org, string project, string? team, Guid queryId, int? top, CancellationToken ct = default);
+
+    /// <summary>
+    /// Reads one page of a work item's update history
+    /// (<c>GET _apis/wit/workItems/{id}/updates?$top=&amp;$skip=</c>). ADO returns updates
+    /// oldest first and accepts <c>$top</c> up to 200. Returns the cloned raw response
+    /// (<c>count</c>, <c>value[]</c> of updates with <c>rev</c>, <c>revisedBy</c>,
+    /// <c>revisedDate</c>, <c>fields{ name: { oldValue, newValue } }</c> and, for link
+    /// changes, <c>relations{ added, removed }</c>). An unknown id is a 404 (TF401232),
+    /// surfaced via <see cref="AdoRestException"/>.
+    /// </summary>
+    Task<JsonElement> GetWorkItemUpdatesAsync(
+        string org, string project, int id, int top, int skip, CancellationToken ct = default);
 }
 
 internal sealed partial class AdoRestClient
@@ -44,6 +56,15 @@ internal sealed partial class AdoRestClient
         url += $"/_apis/wit/wiql/{queryId:D}?api-version=7.1";
         if (top is not null) url += $"&{Uri.EscapeDataString("$top")}={top.Value}";
         return await GetJsonAsync(url, "saved-query run", org, ct).ConfigureAwait(false);
+    }
+
+    public async Task<JsonElement> GetWorkItemUpdatesAsync(
+        string org, string project, int id, int top, int skip, CancellationToken ct = default)
+    {
+        var url = $"https://dev.azure.com/{Uri.EscapeDataString(org)}/{Uri.EscapeDataString(project)}" +
+            $"/_apis/wit/workItems/{id}/updates?{Uri.EscapeDataString("$top")}={top}" +
+            $"&{Uri.EscapeDataString("$skip")}={skip}&api-version=7.1";
+        return await GetJsonAsync(url, "work item updates read", org, ct).ConfigureAwait(false);
     }
 
     private async Task<JsonElement> GetJsonAsync(string url, string operation, string org, CancellationToken ct)
