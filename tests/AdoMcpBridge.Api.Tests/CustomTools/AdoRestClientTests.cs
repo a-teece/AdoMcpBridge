@@ -1173,4 +1173,43 @@ public class AdoRestClientTests
         ex.StatusCode.Should().Be(401);
         ex.Message.Should().Be("nope");
     }
+
+    // ── UpdateWorkItemAsync ──────────────────────────────────────────────────
+
+    [Fact]
+    public async Task UpdateWorkItem_SendsJsonPatchContentType_ToProjectScopedUrl()
+    {
+        var (client, handler) = CreateClient(Json("{\"id\":42,\"rev\":8,\"fields\":{\"System.State\":\"Active\"}}"));
+        var ops = new List<object>
+        {
+            new { op = "add", path = "/fields/System.State", value = "Active" },
+            new { op = "remove", path = "/fields/System.Tags" },
+        };
+
+        var result = await client.UpdateWorkItemAsync("my org", "my proj", 42, ops);
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Patch);
+        handler.LastRequest.RequestUri!.AbsoluteUri.Should().Be(
+            "https://dev.azure.com/my%20org/my%20proj/_apis/wit/workitems/42?api-version=7.1");
+        handler.LastContentType.Should().Be("application/json-patch+json");
+        handler.LastBody.Should().Be(
+            "[{\"op\":\"add\",\"path\":\"/fields/System.State\",\"value\":\"Active\"}," +
+            "{\"op\":\"remove\",\"path\":\"/fields/System.Tags\"}]");
+        handler.LastRequest.Headers.Authorization!.Scheme.Should().Be("Bearer");
+        handler.LastRequest.Headers.Authorization.Parameter.Should().Be(CallerToken);
+        result.GetProperty("rev").GetInt32().Should().Be(8);
+    }
+
+    [Fact]
+    public async Task UpdateWorkItem_SurfacesAdoMessage_OnFailure()
+    {
+        var (client, _) = CreateClient(Json(
+            "{\"message\":\"TF401320: Rule Error for field State.\"}", HttpStatusCode.BadRequest));
+
+        var act = () => client.UpdateWorkItemAsync("org", "proj", 42, [new { op = "add" }]);
+
+        var ex = (await act.Should().ThrowAsync<AdoRestException>()).Which;
+        ex.StatusCode.Should().Be(400);
+        ex.Message.Should().Be("TF401320: Rule Error for field State.");
+    }
 }
