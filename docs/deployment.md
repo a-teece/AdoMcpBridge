@@ -386,7 +386,7 @@ az containerapp revision restart -n ca-adomcp-prod -g rg-adomcp-prod `
 
 The native custom tools (`ado_bridge_wit_get`,
 `ado_bridge_wit_get_batch`, `ado_bridge_wiql_query`,
-`ado_bridge_wit_search`,
+`ado_bridge_wit_search`, `ado_bridge_wit_list`,
 `ado_bridge_download_field`, `ado_bridge_download_field_as_file`,
 `ado_bridge_download_attachment`,
 `ado_bridge_create_upload_slot`, `ado_bridge_write_field_from_slot`,
@@ -429,6 +429,13 @@ same as if they'd called the REST API directly.
 >   slim list (id, type, title, state, assignedTo, project) plus the total
 >   count; `top` is capped at 100 and `skip` is limited to 0–1000 by the
 >   Search API.
+> - `ado_bridge_wit_list` — builds WIQL from structured filters (types,
+>   states, `assignedTo` incl. `"@me"`, area/iteration path, tags, title
+>   text) scoped to one project, runs it via `POST /_apis/wit/wiql`, then
+>   hydrates via `POST /_apis/wit/workitemsbatch`; requires "View work items
+>   in this node" (read-only). Returns slim work items plus `truncated`;
+>   `top` defaults to 50 and is capped at 200, and `orderBy` is limited to a
+>   fixed field whitelist.
 > - `ado_bridge_create_upload_slot` / `ado_bridge_write_field_from_slot` —
 >   `PATCH /_apis/wit/workitems/{id}` requires "Edit work items in this
 >   node".

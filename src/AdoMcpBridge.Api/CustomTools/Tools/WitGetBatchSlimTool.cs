@@ -100,7 +100,7 @@ internal sealed class WitGetBatchSlimTool : ICustomMcpTool
         {
             writer.WriteStartArray();
             foreach (var wi in workItems)
-                WitGetSlimTool.WriteSlimWorkItem(writer, wi, longTextFields);
+                WorkItemSlimProjector.Write(writer, wi, longTextFields);
             writer.WriteEndArray();
         }
         return new McpToolResult(Encoding.UTF8.GetString(ms.ToArray()));

@@ -25,6 +25,7 @@ public sealed class NativeToolCatalogTests : IClassFixture<BridgeApiFactory>
         names.Should().OnlyHaveUniqueItems();
         names.Should().OnlyContain(n => n.StartsWith("ado_bridge_", StringComparison.Ordinal));
         names.Should().Contain("ado_bridge_wit_search");
+        names.Should().Contain("ado_bridge_wit_list");
 
         foreach (var tool in tools)
         {
