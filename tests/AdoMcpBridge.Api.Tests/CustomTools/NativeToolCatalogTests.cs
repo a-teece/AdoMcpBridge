@@ -28,6 +28,8 @@ public sealed class NativeToolCatalogTests : IClassFixture<BridgeApiFactory>
         names.Should().Contain("ado_bridge_wit_list");
         names.Should().Contain("ado_bridge_wit_list_queries");
         names.Should().Contain("ado_bridge_wit_run_query");
+        names.Should().Contain("ado_bridge_wit_update");
+        names.Should().Contain("ado_bridge_wit_update_batch");
 
         foreach (var tool in tools)
         {

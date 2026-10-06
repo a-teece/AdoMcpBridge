@@ -388,6 +388,7 @@ The native custom tools (`ado_bridge_wit_get`,
 `ado_bridge_wit_get_batch`, `ado_bridge_wiql_query`,
 `ado_bridge_wit_search`, `ado_bridge_wit_list`,
 `ado_bridge_wit_list_queries`, `ado_bridge_wit_run_query`,
+`ado_bridge_wit_update`, `ado_bridge_wit_update_batch`,
 `ado_bridge_download_field`, `ado_bridge_download_field_as_file`,
 `ado_bridge_download_attachment`,
 `ado_bridge_create_upload_slot`, `ado_bridge_write_field_from_slot`,
@@ -447,6 +448,16 @@ same as if they'd called the REST API directly.
 >   items in this node" (read-only). Returns work item IDs only plus
 >   `truncated`, in the same shape as `ado_bridge_wiql_query`; `top` defaults
 >   to 200 (max 2000). Pass `team` for `@CurrentIteration` queries.
+> - `ado_bridge_wit_update` / `ado_bridge_wit_update_batch` —
+>   `PATCH /_apis/wit/workitems/{id}` (JSON Patch) requires "Edit work items
+>   in this node". Writes scalar fields only (`set` → patch `add`, `clear` →
+>   patch `remove`; numbers and booleans are sent as strings). Long-text fields
+>   are rejected in favour of `ado_bridge_create_upload_slot` +
+>   `ado_bridge_write_field_from_slot`, and `System.Parent` in favour of
+>   `ado_bridge_wit_link`. The batch tool takes up to 50 items, validates all
+>   of them before writing, then sends one PATCH per item in order — it is not
+>   atomic, and each item's result (`UPDATED` with `rev`, or `FAILED` with
+>   ADO's error) is reported separately.
 > - `ado_bridge_create_upload_slot` / `ado_bridge_write_field_from_slot` —
 >   `PATCH /_apis/wit/workitems/{id}` requires "Edit work items in this
 >   node".

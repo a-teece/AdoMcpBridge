@@ -73,6 +73,8 @@ builder.Services.AddSingleton<ICustomMcpTool, WitSearchTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WitListTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WitListQueriesTool>();
 builder.Services.AddSingleton<ICustomMcpTool, WitRunQueryTool>();
+builder.Services.AddSingleton<ICustomMcpTool, WitUpdateTool>();
+builder.Services.AddSingleton<ICustomMcpTool, WitUpdateBatchTool>();
 builder.Services.AddSingleton<ICustomMcpTool, ListCommentsTool>();
 builder.Services.AddSingleton<ICustomMcpTool, GetCommentTool>();
 builder.Services.AddSingleton<ICustomMcpTool, AddCommentTool>();
