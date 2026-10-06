@@ -5,12 +5,8 @@ namespace AdoMcpBridge.Api.CustomTools.Tools;
 
 internal sealed class WitGetSlimTool : ICustomMcpTool
 {
-    /// <summary>
-    /// Defensive ceiling: any string field longer than this is stubbed even when it
-    /// is not a known long-text field, so a new/custom field type can never silently
-    /// reintroduce an oversized read that blows the model's context budget. Tune here.
-    /// </summary>
-    internal const int OversizeFieldCharCeiling = 4096;
+    /// <summary>See <see cref="WorkItemSlimProjector.OversizeFieldCharCeiling"/>.</summary>
+    internal const int OversizeFieldCharCeiling = WorkItemSlimProjector.OversizeFieldCharCeiling;
 
     private readonly IAdoRestClient _ado;
     private readonly IWorkItemFieldTypeCache _fieldTypes;
@@ -85,52 +81,8 @@ internal sealed class WitGetSlimTool : ICustomMcpTool
         using var ms = new MemoryStream();
         using (var writer = new Utf8JsonWriter(ms))
         {
-            WriteSlimWorkItem(writer, workItem, longTextFields);
+            WorkItemSlimProjector.Write(writer, workItem, longTextFields);
         }
         return Encoding.UTF8.GetString(ms.ToArray());
-    }
-
-    internal static void WriteSlimWorkItem(
-        Utf8JsonWriter writer, JsonElement workItem, IReadOnlySet<string> longTextFields)
-    {
-        writer.WriteStartObject();
-        foreach (var prop in workItem.EnumerateObject())
-        {
-            if (prop.NameEquals("fields"))
-            {
-                writer.WritePropertyName("fields");
-                WriteSlimFields(writer, prop.Value, longTextFields);
-            }
-            else
-            {
-                prop.WriteTo(writer);
-            }
-        }
-        writer.WriteEndObject();
-    }
-
-    private static void WriteSlimFields(
-        Utf8JsonWriter writer, JsonElement fields, IReadOnlySet<string> longTextFields)
-    {
-        writer.WriteStartObject();
-        foreach (var field in fields.EnumerateObject())
-        {
-            if (field.Value.ValueKind == JsonValueKind.String &&
-                field.Value.GetString() is { Length: > 0 } value &&
-                (longTextFields.Contains(field.Name) || value.Length > OversizeFieldCharCeiling))
-            {
-                writer.WritePropertyName(field.Name);
-                writer.WriteStartObject();
-                writer.WriteNumber("charCount", value.Length);
-                writer.WriteString("note", "Field contains long text. Use ado_bridge_download_field to read it inline, " +
-                    "or ado_bridge_download_field_as_file to save it to a file without loading it into context.");
-                writer.WriteEndObject();
-            }
-            else
-            {
-                field.WriteTo(writer);
-            }
-        }
-        writer.WriteEndObject();
     }
 }
