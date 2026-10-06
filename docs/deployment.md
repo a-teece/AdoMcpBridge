@@ -389,7 +389,7 @@ The native custom tools (`ado_bridge_wit_get`,
 `ado_bridge_wit_search`, `ado_bridge_wit_list`,
 `ado_bridge_wit_list_queries`, `ado_bridge_wit_run_query`,
 `ado_bridge_wit_update`, `ado_bridge_wit_update_batch`,
-`ado_bridge_wit_link`,
+`ado_bridge_wit_link`, `ado_bridge_wit_history`,
 `ado_bridge_download_field`, `ado_bridge_download_field_as_file`,
 `ado_bridge_download_attachment`,
 `ado_bridge_create_upload_slot`, `ado_bridge_write_field_from_slot`,
@@ -467,6 +467,14 @@ same as if they'd called the REST API directly.
 >   way to set a parent. `remove` matches the link by relation type and
 >   target id, errors without writing if it is absent, and sends a `test` on
 >   `/rev` so ADO rejects the patch if the item changed since the read.
+> - `ado_bridge_wit_history` — `GET /_apis/wit/workItems/{id}/updates`
+>   requires "View work items in this node" (read-only). Returns the item's
+>   updates newest first (rev, revisedBy, revisedDate, field changes as
+>   field/old/new, and ADO's `relations` added/removed for link changes);
+>   `top` defaults to 20 and is capped at 100, `skip` counts from the newest
+>   update. Azure DevOps only returns updates oldest first (200 per page), so
+>   the bridge reads every page before ordering. Any old/new text over 4096
+>   characters is replaced by `{"stubbed":true,"length":N}`.
 > - `ado_bridge_create_upload_slot` / `ado_bridge_write_field_from_slot` —
 >   `PATCH /_apis/wit/workitems/{id}` requires "Edit work items in this
 >   node".

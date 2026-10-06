@@ -602,6 +602,41 @@ public class AdoRestClientTests
         ex.Message.Should().StartWith("TF401243: The query 00000000-0000-0000-0000-000000000001 does not exist");
     }
 
+    // ── GetWorkItemUpdatesAsync ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetUpdates_BuildsTopSkipQuery()
+    {
+        var (client, handler) = CreateClient(Json(
+            "{\"count\":1,\"value\":[{\"id\":3,\"workItemId\":42,\"rev\":3}]}"));
+
+        var result = await client.GetWorkItemUpdatesAsync("my org", "my proj", 42, 200, 400);
+
+        handler.LastRequest!.Method.Should().Be(HttpMethod.Get);
+        handler.LastRequest.RequestUri!.AbsoluteUri.Should().Be(
+            "https://dev.azure.com/my%20org/my%20proj/_apis/wit/workItems/42/updates" +
+            "?%24top=200&%24skip=400&api-version=7.1");
+        handler.LastRequest.Headers.Authorization!.Parameter.Should().Be(CallerToken);
+        result.GetProperty("value")[0].GetProperty("rev").GetInt32().Should().Be(3);
+    }
+
+    [Fact]
+    public async Task GetUpdates_SurfacesAdoMessage_OnFailure()
+    {
+        // Message captured live (2026-10-06) for an unknown work item id.
+        var (client, _) = CreateClient(Json(
+            "{\"$id\":\"1\",\"innerException\":null,\"message\":\"TF401232: Work item 999999999 does not exist, " +
+            "or you do not have permissions to read it.\",\"typeKey\":\"WorkItemUnauthorizedAccessException\"," +
+            "\"errorCode\":0,\"eventId\":3200}",
+            HttpStatusCode.NotFound));
+
+        var act = () => client.GetWorkItemUpdatesAsync("org", "proj", 999999999, 200, 0);
+
+        var ex = (await act.Should().ThrowAsync<AdoRestException>()).Which;
+        ex.StatusCode.Should().Be(404);
+        ex.Message.Should().StartWith("TF401232: Work item 999999999 does not exist");
+    }
+
     // ── QueryByWiqlAsync ─────────────────────────────────────────────────────
 
     [Fact]
